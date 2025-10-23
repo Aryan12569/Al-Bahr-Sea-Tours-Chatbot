@@ -8,7 +8,6 @@ import requests
 import logging
 import time
 import re
-import redis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,16 +19,16 @@ app = Flask(__name__)
 # CONFIGURATION - AL BAHR SEA TOURS
 # ==============================
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "ALBAHRB0T")
-WHATSAPP_TOKEN = os.environ.get("ACCESS")  # FIXED: Correct variable name
+WHATSAPP_TOKEN = os.environ.get("ACCESS_TOKEN")
 SHEET_NAME = os.environ.get("SHEET_NAME", "Al Bahr Bot Leads")
 WHATSAPP_PHONE_ID = os.environ.get("PHONE_NUMBER_ID", "797371456799734")
 
 # Validate required environment variables
 missing_vars = []
 if not WHATSAPP_TOKEN:
-    missing_vars.append("WHATSAPP_TOKEN")
+    missing_vars.append("ACCESS_TOKEN")
 if not WHATSAPP_PHONE_ID:
-    missing_vars.append("WHATSAPP_PHONE_ID")
+    missing_vars.append("PHONE_NUMBER_ID")
 if not os.environ.get("GOOGLE_CREDS_JSON"):
     missing_vars.append("GOOGLE_CREDS_JSON")
 
@@ -43,58 +42,13 @@ try:
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME).sheet1
-    logger.info("Google Sheets initialized successfully")
+    logger.info("✅ Google Sheets initialized successfully")
 except Exception as e:
-    logger.error(f"Google Sheets initialization failed: {str(e)}")
+    logger.error(f"❌ Google Sheets initialization failed: {str(e)}")
     sheet = None
 
-# Redis for session management (fallback to dict if Redis not available)
-try:
-    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-    redis_client.ping()
-    logger.info("Redis connected successfully")
-except:
-    logger.warning("Redis not available, using in-memory session storage")
-    redis_client = None
-
-# In-memory session storage as fallback
+# Simple session management
 booking_sessions = {}
-
-# ==============================
-# SESSION MANAGEMENT FUNCTIONS
-# ==============================
-
-def get_session(phone_number):
-    """Get session data for a phone number"""
-    try:
-        if redis_client:
-            data = redis_client.get(f"session:{phone_number}")
-            return json.loads(data) if data else None
-        else:
-            return booking_sessions.get(phone_number)
-    except Exception as e:
-        logger.error(f"Error getting session for {phone_number}: {str(e)}")
-        return None
-
-def set_session(phone_number, data, ttl=3600):  # 1 hour TTL
-    """Set session data for a phone number"""
-    try:
-        if redis_client:
-            redis_client.setex(f"session:{phone_number}", ttl, json.dumps(data))
-        else:
-            booking_sessions[phone_number] = data
-    except Exception as e:
-        logger.error(f"Error setting session for {phone_number}: {str(e)}")
-
-def delete_session(phone_number):
-    """Delete session data for a phone number"""
-    try:
-        if redis_client:
-            redis_client.delete(f"session:{phone_number}")
-        else:
-            booking_sessions.pop(phone_number, None)
-    except Exception as e:
-        logger.error(f"Error deleting session for {phone_number}: {str(e)}")
 
 # ==============================
 # HELPER FUNCTIONS
@@ -105,19 +59,19 @@ def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specifi
     try:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
         sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, people_count])
-        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}, {tour_type}, {booking_date}, {booking_time}, {people_count}")
+        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to add lead to sheet: {str(e)}")
         return False
 
 def send_whatsapp_message(to, message, interactive_data=None):
-    """Send WhatsApp message via Meta API with better error handling"""
+    """Send WhatsApp message via Meta API"""
     try:
         # Clean the phone number
         clean_to = clean_oman_number(to)
         if not clean_to:
-            logger.error(f"Invalid phone number: {to}")
+            logger.error(f"❌ Invalid phone number: {to}")
             return False
         
         url = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_ID}/messages"
@@ -143,7 +97,7 @@ def send_whatsapp_message(to, message, interactive_data=None):
                 }
             }
 
-        logger.info(f"Sending WhatsApp message to {clean_to}")
+        logger.info(f"📤 Sending WhatsApp message to {clean_to}")
         
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         response_data = response.json()
@@ -153,22 +107,11 @@ def send_whatsapp_message(to, message, interactive_data=None):
             return True
         else:
             error_message = response_data.get('error', {}).get('message', 'Unknown error')
-            error_code = response_data.get('error', {}).get('code', 'Unknown')
-            
-            # Handle specific errors
-            if error_code == 131030:
-                logger.warning(f"⚠️ Number {clean_to} not in allowed list. Add it to Meta Business Account.")
-                return False
-            elif error_code == 131031:
-                logger.warning(f"⚠️ Rate limit hit for {clean_to}. Waiting before retry.")
-                time.sleep(2)
-                return False
-            else:
-                logger.error(f"❌ WhatsApp API error {response.status_code} (Code: {error_code}): {error_message} for {clean_to}")
-                return False
+            logger.error(f"❌ WhatsApp API error {response.status_code}: {error_message}")
+            return False
         
     except Exception as e:
-        logger.error(f"🚨 Failed to send WhatsApp message to {to}: {str(e)}")
+        logger.error(f"🚨 Failed to send WhatsApp message: {str(e)}")
         return False
 
 def clean_oman_number(number):
@@ -193,11 +136,10 @@ def clean_oman_number(number):
         # Already in correct format
         return clean_number
     
-    logger.warning(f"Invalid Oman number format: {number} -> {clean_number}")
     return None
 
 def send_welcome_message(to):
-    """Send initial welcome message with ONE View Options button"""
+    """Send initial welcome message"""
     interactive_data = {
         "type": "button",
         "body": {
@@ -331,13 +273,14 @@ def send_booking_options(to):
 def start_booking_flow(to):
     """Start the booking flow by asking for name"""
     # Clear any existing session
-    delete_session(to)
+    if to in booking_sessions:
+        del booking_sessions[to]
     
     # Create new session
-    set_session(to, {
+    booking_sessions[to] = {
         'step': 'awaiting_name',
         'flow': 'booking'
-    })
+    }
     
     send_whatsapp_message(to, 
         "📝 *Let's Book Your Tour!* 🎫\n\n"
@@ -350,13 +293,14 @@ def start_booking_flow(to):
 def start_inquiry_flow(to):
     """Start the inquiry flow"""
     # Clear any existing session
-    delete_session(to)
+    if to in booking_sessions:
+        del booking_sessions[to]
     
     # Create new session
-    set_session(to, {
+    booking_sessions[to] = {
         'step': 'awaiting_inquiry',
         'flow': 'inquiry'
-    })
+    }
     
     # Save inquiry intent to Google Sheets immediately
     add_lead_to_sheet(
@@ -370,22 +314,21 @@ def start_inquiry_flow(to):
     send_whatsapp_message(to,
         "💬 *Tour Inquiry* 🤔\n\n"
         "Got questions? We're here to help! 😊\n\n"
-        "Please tell us:\n\n"
+        "Please tell us about your interest:\n\n"
         "• Which tour interests you? 🚤\n"
         "• How many people? 👥\n" 
         "• Preferred date? 📅\n"
-        "• Any special requirements? 🌟\n\n"
-        "Our team will contact you shortly with all the details! 📞")
+        "• Any questions? ❓\n\n"
+        "We'll contact you shortly with all details! 📞")
 
 def ask_for_contact(to, name):
     """Ask for contact after getting name"""
     # Update session with name
-    session = get_session(to) or {}
-    session.update({
-        'step': 'awaiting_contact',
-        'name': name
-    })
-    set_session(to, session)
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_contact',
+            'name': name
+        })
     
     send_whatsapp_message(to, 
         f"Perfect, {name}! 👋\n\n"
@@ -397,13 +340,12 @@ def ask_for_contact(to, name):
 def ask_for_tour_type(to, name, contact):
     """Ask for tour type using interactive list"""
     # Update session with contact
-    session = get_session(to) or {}
-    session.update({
-        'step': 'awaiting_tour_type',
-        'name': name,
-        'contact': contact
-    })
-    set_session(to, session)
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_tour_type',
+            'name': name,
+            'contact': contact
+        })
     
     interactive_data = {
         "type": "list",
@@ -451,14 +393,13 @@ def ask_for_tour_type(to, name, contact):
 def ask_for_people_count(to, name, contact, tour_type):
     """Ask for number of people"""
     # Update session with tour type
-    session = get_session(to) or {}
-    session.update({
-        'step': 'awaiting_people_count',
-        'name': name,
-        'contact': contact,
-        'tour_type': tour_type
-    })
-    set_session(to, session)
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_people_count',
+            'name': name,
+            'contact': contact,
+            'tour_type': tour_type
+        })
     
     interactive_data = {
         "type": "list",
@@ -511,40 +452,37 @@ def ask_for_people_count(to, name, contact, tour_type):
 def ask_for_date(to, name, contact, tour_type, people_count):
     """Ask for preferred date"""
     # Update session with people count
-    session = get_session(to) or {}
-    session.update({
-        'step': 'awaiting_date',
-        'name': name,
-        'contact': contact,
-        'tour_type': tour_type,
-        'people_count': people_count
-    })
-    set_session(to, session)
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_date',
+            'name': name,
+            'contact': contact,
+            'tour_type': tour_type,
+            'people_count': people_count
+        })
     
     send_whatsapp_message(to,
         f"📅 *Preferred Date*\n\n"
         f"Great choice! {people_count} for {tour_type}. 🎯\n\n"
         "Please send your *preferred date*:\n\n"
         "*Examples:*\n"
+        "• Tomorrow\n"
         "• October 29\n"
-        "• Next Friday\n"
-        "• November 5\n"
-        "• Tomorrow\n\n"
+        "• Next Friday\n\n"
         "We'll check availability for your chosen date! 📅")
 
 def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
     """Ask for preferred time"""
     # Update session with date
-    session = get_session(to) or {}
-    session.update({
-        'step': 'awaiting_time',
-        'name': name,
-        'contact': contact,
-        'tour_type': tour_type,
-        'people_count': people_count,
-        'booking_date': booking_date
-    })
-    set_session(to, session)
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_time',
+            'name': name,
+            'contact': contact,
+            'tour_type': tour_type,
+            'people_count': people_count,
+            'booking_date': booking_date
+        })
     
     interactive_data = {
         "type": "list",
@@ -607,24 +545,23 @@ def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
 def complete_booking(to, name, contact, tour_type, people_count, booking_date, booking_time):
     """Complete the booking and save to sheet"""
     # Save to Google Sheets
-    success = False
-    if sheet:
-        success = add_lead_to_sheet(
-            name=name,
-            contact=contact,
-            intent="Book Tour",
-            whatsapp_id=to,
-            tour_type=tour_type,
-            booking_date=booking_date,
-            booking_time=booking_time,
-            people_count=people_count
-        )
+    success = add_lead_to_sheet(
+        name=name,
+        contact=contact,
+        intent="Book Tour",
+        whatsapp_id=to,
+        tour_type=tour_type,
+        booking_date=booking_date,
+        booking_time=booking_time,
+        people_count=people_count
+    )
     
     # Clear the session
-    delete_session(to)
+    if to in booking_sessions:
+        del booking_sessions[to]
     
+    # Send confirmation message
     if success:
-        # Send confirmation message
         send_whatsapp_message(to,
             f"🎉 *Booking Confirmed!* ✅\n\n"
             f"Thank you {name}! Your tour has been booked successfully. 🐬\n\n"
@@ -640,9 +577,8 @@ def complete_booking(to, name, contact, tour_type, people_count, booking_date, b
             f"For immediate assistance: +968 24 123456 📞\n\n"
             f"Get ready for an amazing sea adventure! 🌊")
     else:
-        # Send error message but still confirm
         send_whatsapp_message(to,
-            f"🎉 *Booking Received!* 📝\n\n"
+            f"📝 *Booking Received!*\n\n"
             f"Thank you {name}! We've received your booking request. 🐬\n\n"
             f"📋 *Your Details:*\n"
             f"👤 Name: {name}\n"
@@ -651,8 +587,7 @@ def complete_booking(to, name, contact, tour_type, people_count, booking_date, b
             f"👥 People: {people_count}\n"
             f"📅 Date: {booking_date}\n"
             f"🕒 Time: {booking_time}\n\n"
-            f"Our team will contact you within 1 hour to confirm. ⏰\n"
-            f"For immediate assistance: +968 24 123456 📞")
+            f"Our team will contact you within 1 hour to confirm. 📞")
 
 def calculate_price(tour_type, people_count):
     """Calculate tour price based on type and people count"""
@@ -690,7 +625,7 @@ https://maps.app.goo.gl/albahrseatours
 🚗 *Parking:* Available at marina
 ⏰ *Opening Hours:* 7:00 AM - 7:00 PM Daily
 
-We're located at the beautiful Bandar Al Rowdha Marina - the perfect starting point for your sea adventure! 🚤"""
+We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
         send_whatsapp_message(phone_number, response)
         return True
     
@@ -714,8 +649,7 @@ We're located at the beautiful Bandar Al Rowdha Marina - the perfect starting po
 • 4 hours • 50 OMR per person
 • Includes: Fishing gear, bait, refreshments
 
-👨‍👩‍👧‍👦 *Family & Group Discounts Available!*
-💳 *Payment:* Cash/Card accepted"""
+👨‍👩‍👧‍👦 *Family & Group Discounts Available!*"""
         send_whatsapp_message(phone_number, response)
         return True
     
@@ -732,12 +666,7 @@ We're located at the beautiful Bandar Al Rowdha Marina - the perfect starting po
 • Fishing Trips: 2:00 PM
 • Dhow Cruises: 4:00 PM, 6:00 PM
 
-🌅 *Sunset Specials:*
-• Sunset Dolphin: 5:00 PM
-• Sunset Cruise: 6:30 PM
-
-📅 *Advanced booking recommended!*
-⏰ *Check-in:* 30 minutes before departure"""
+📅 *Advanced booking recommended!*"""
         send_whatsapp_message(phone_number, response)
         return True
     
@@ -755,9 +684,7 @@ We're located at the beautiful Bandar Al Rowdha Marina - the perfect starting po
 7:00 AM - 7:00 PM Daily
 
 📍 *Visit Us:*
-Marina Bandar Al Rowdha, Muscat
-
-We're here to help you plan the perfect sea adventure! 🐬"""
+Marina Bandar Al Rowdha, Muscat"""
         send_whatsapp_message(phone_number, response)
         return True
     
@@ -839,12 +766,6 @@ def handle_interaction(interaction_id, phone_number):
 • Refreshments & bottled water 🥤
 • Photography opportunities 📸
 
-*What to bring:*
-• Swimwear 🩱
-• Sunscreen 🧴
-• Towel 🧼
-• Camera 📷
-
 *Best time:* Morning tours (8AM, 10AM)
 *Success rate:* 95% dolphin sightings! 
 
@@ -870,9 +791,6 @@ Ready to book? Select 'Book Now'! 📅""",
 • Sea turtles (if lucky!) 🐢
 • Crystal clear waters 💎
 
-*Suitable for:* Beginners to experienced
-*Location:* Protected coral bays 
-
 Ready to explore? Select 'Book Now'! 🌊""",
 
         "dhow_cruise": """⛵ *Traditional Dhow Cruise* 🌅
@@ -888,13 +806,6 @@ Ready to explore? Select 'Book Now'! 🌊""",
 • Sunset views & photography 🌅
 • Omani dinner & refreshments 🍽️
 • Soft drinks & water 🥤
-• Traditional music 🎵
-
-*Experience:*
-• Sail along Muscat coast 🏖️
-• Watch stunning sunset 🌅
-• Enjoy Omani hospitality 🏽
-• Relax in traditional setting 🛋️
 
 *Departure times:* 4:00 PM, 6:00 PM
 *Perfect for:* Couples, families, special occasions 
@@ -915,12 +826,6 @@ Ready to sail? Select 'Book Now'! ⛵""",
 • Expert fishing guide 🧭
 • Refreshments & snacks 🥤🍎
 • Clean & prepare your catch 🐟
-
-*What you might catch:*
-• Kingfish 🐟
-• Tuna 🐠
-• Barracuda 🦈
-• Sultan Ibrahim 🐡
 
 *Suitable for:* Beginners to experienced
 *Includes:* Fishing license
@@ -949,8 +854,6 @@ Ready to catch the big one? Select 'Book Now'! 🎣""",
 • Group Booking (6+ people): 15% discount
 • Children under 12: 50% discount
 
-💳 *Payment Methods:* Cash, Credit Card, Bank Transfer
-
 Book your adventure today! 📅""",
 
         "location": """📍 *Our Location & Directions* 🗺️
@@ -972,7 +875,7 @@ https://maps.app.goo.gl/albahrseatours
 ⏰ *Operating Hours:*
 7:00 AM - 7:00 PM Daily
 
-We're easy to find at the beautiful Bandar Al Rowdha Marina! 🚤""",
+We're easy to find at Bandar Al Rowdha Marina! 🚤""",
 
         "schedule": """🕒 *Tour Schedule & Availability* 📅
 
@@ -994,10 +897,7 @@ We're easy to find at the beautiful Bandar Al Rowdha Marina! 🚤""",
 • 6:30 PM - Sunset Cruise 🌅
 
 📅 *Advanced booking recommended*
-⏰ *Check-in:* 30 minutes before departure
-📞 *Confirm your booking:* +968 24 123456
-
-Plan your perfect sea adventure! 🗓️""",
+⏰ *Check-in:* 30 minutes before departure""",
 
         "contact": """📞 *Contact Al Bahr Sea Tours* 📱
 
@@ -1008,16 +908,13 @@ Plan your perfect sea adventure! 🗓️""",
 📧 *Email:* info@albahrseatours.com
 
 🌐 *Website:* www.albahrseatours.com
-📷 *Instagram:* @albahrseatours
 
 ⏰ *Customer Service Hours:*
 7:00 AM - 7:00 PM Daily
 
 📍 *Visit Us:*
 Marina Bandar Al Rowdha
-Muscat, Oman
-
-*Follow us for special offers & updates!* ✨""",
+Muscat, Oman""",
 
         "book_now": lambda: send_booking_options(phone_number),
         
@@ -1036,7 +933,7 @@ Muscat, Oman
         send_whatsapp_message(phone_number, response)
         return True
     else:
-        send_whatsapp_message(phone_number, "Sorry, I didn't understand that option. Please select '🌊 View Tours' to see available choices.")
+        send_whatsapp_message(phone_number, "Sorry, I didn't understand that option. Please select from the menu. 📋")
         return False
 
 # ==============================
@@ -1073,7 +970,6 @@ def webhook():
     """Handle incoming WhatsApp messages and interactions"""
     try:
         data = request.get_json()
-        logger.info(f"📨 Received webhook data: {json.dumps(data, indent=2)}")
         
         # Extract message details
         entry = data.get("entry", [{}])[0]
@@ -1082,7 +978,6 @@ def webhook():
         messages = value.get("messages", [])
         
         if not messages:
-            logger.info("No messages in webhook")
             return jsonify({"status": "no_message"})
             
         message = messages[0]
@@ -1094,26 +989,19 @@ def webhook():
             interactive_type = interactive_data["type"]
             
             if interactive_type == "list_reply":
-                # Handle list selection
                 list_reply = interactive_data["list_reply"]
                 option_id = list_reply["id"]
-                option_title = list_reply["title"]
                 
-                logger.info(f"📋 List option selected: {option_id} - {option_title} by {phone_number}")
-                
-                # Handle the interaction
+                logger.info(f"📋 List option selected: {option_id} by {phone_number}")
                 handle_interaction(option_id, phone_number)
                 return jsonify({"status": "list_handled"})
             
             elif interactive_type == "button_reply":
-                # Handle button click
                 button_reply = interactive_data["button_reply"]
                 button_id = button_reply["id"]
-                button_title = button_reply["title"]
                 
-                logger.info(f"🔘 Button clicked: {button_id} - {button_title} by {phone_number}")
+                logger.info(f"🔘 Button clicked: {button_id} by {phone_number}")
                 
-                # Handle view_options button
                 if button_id == "view_options":
                     send_main_options_list(phone_number)
                     return jsonify({"status": "view_options_sent"})
@@ -1124,91 +1012,65 @@ def webhook():
         # Handle text messages
         if "text" in message:
             text = message["text"]["body"].strip()
-            logger.info(f"💬 Text message received: '{text}' from {phone_number}")
+            logger.info(f"💬 Text message: '{text}' from {phone_number}")
             
             # Get current session
-            session = get_session(phone_number)
+            session = booking_sessions.get(phone_number)
             
             # First, check for keyword questions (unless in booking flow)
             if not session and handle_keyword_questions(text, phone_number):
                 return jsonify({"status": "keyword_answered"})
             
-            # Check for greeting or any message to show welcome
-            if not session and text.lower() in ["hi", "hello", "hey", "start", "menu", "hola"]:
+            # Check for greeting
+            if not session and text.lower() in ["hi", "hello", "hey", "start", "menu"]:
                 send_welcome_message(phone_number)
                 return jsonify({"status": "welcome_sent"})
             
             # Handle booking flow - name input
             if session and session.get('step') == 'awaiting_name':
-                # Store name and ask for contact
-                set_session(phone_number, {
-                    'step': 'awaiting_contact',
-                    'flow': 'booking',
-                    'name': text
-                })
                 ask_for_contact(phone_number, text)
                 return jsonify({"status": "name_received"})
             
             # Handle booking flow - contact input
             elif session and session.get('step') == 'awaiting_contact':
-                # Store contact and ask for tour type
                 name = session.get('name', '')
-                contact = text
-                ask_for_tour_type(phone_number, name, contact)
+                ask_for_tour_type(phone_number, name, text)
                 return jsonify({"status": "contact_received"})
             
             # Handle booking flow - date input
             elif session and session.get('step') == 'awaiting_date':
-                # Store date and ask for time
                 name = session.get('name', '')
                 contact = session.get('contact', '')
                 tour_type = session.get('tour_type', '')
                 people_count = session.get('people_count', '')
-                booking_date = text
                 
-                ask_for_time(phone_number, name, contact, tour_type, people_count, booking_date)
+                ask_for_time(phone_number, name, contact, tour_type, people_count, text)
                 return jsonify({"status": "date_received"})
             
             # Handle inquiry flow
             elif session and session.get('step') == 'awaiting_inquiry':
-                # Save the inquiry details
-                inquiry_text = text
+                # Save inquiry details
                 add_lead_to_sheet(
                     name="Inquiry Customer",
                     contact=phone_number,
                     intent="Tour Inquiry Details",
                     whatsapp_id=phone_number,
-                    tour_type="Custom Inquiry",
-                    booking_date="Not specified",
-                    booking_time="Not specified",
-                    people_count="Not specified"
+                    tour_type="Custom Inquiry"
                 )
                 
-                # Send confirmation
                 send_whatsapp_message(phone_number,
                     "✅ *Inquiry Received!* 📝\n\n"
                     "Thank you for your inquiry! Our team will contact you shortly with all the information you need. 📞\n\n"
-                    "We'll provide:\n"
-                    "• Detailed tour information 📋\n"
-                    "• Available time slots 🕒\n"
-                    "• Special offers & discounts 💰\n"
-                    "• Answers to all your questions ❓\n\n"
                     "Expected response time: 1-2 hours ⏰")
                 
                 # Clear session
-                delete_session(phone_number)
+                del booking_sessions[phone_number]
                 return jsonify({"status": "inquiry_received"})
             
-            # If no specific match and no keyword handled, send welcome message
+            # If no specific match, send welcome message
             if not session:
                 send_welcome_message(phone_number)
                 return jsonify({"status": "fallback_welcome_sent"})
-            else:
-                # If in session but message doesn't match expected step, provide guidance
-                current_step = session.get('step', 'unknown')
-                send_whatsapp_message(phone_number,
-                    "I'm currently helping you with a booking. Please provide the information I asked for, or type 'cancel' to start over. 🔄")
-                return jsonify({"status": "in_session_guidance"})
         
         return jsonify({"status": "unhandled_message_type"})
         
@@ -1225,48 +1087,39 @@ def get_leads():
     """Return all leads for dashboard"""
     try:
         if not sheet:
-            logger.error("Google Sheets not available")
             return jsonify({"error": "Google Sheets not configured"}), 500
         
-        try:
-            all_values = sheet.get_all_values()
-            
-            if not all_values or len(all_values) <= 1:
-                logger.info("No data found in Google Sheets")
-                return jsonify([])
-            
-            headers = all_values[0]
-            logger.info(f"Sheet headers: {headers}")
-            
-            valid_leads = []
-            for i, row in enumerate(all_values[1:], start=2):
-                if not any(cell.strip() for cell in row):
-                    continue
-                    
-                processed_row = {}
-                for j, header in enumerate(headers):
-                    value = row[j] if j < len(row) else ""
-                    processed_row[header] = str(value).strip() if value else ""
+        all_values = sheet.get_all_values()
+        
+        if not all_values or len(all_values) <= 1:
+            return jsonify([])
+        
+        headers = all_values[0]
+        valid_leads = []
+        
+        for row in all_values[1:]:
+            if not any(cell.strip() for cell in row):
+                continue
                 
-                has_data = any([
-                    processed_row.get('Name', ''),
-                    processed_row.get('Contact', ''), 
-                    processed_row.get('WhatsApp ID', ''),
-                    processed_row.get('Intent', '')
-                ])
-                
-                if has_data:
-                    valid_leads.append(processed_row)
+            processed_row = {}
+            for j, header in enumerate(headers):
+                value = row[j] if j < len(row) else ""
+                processed_row[header] = str(value).strip() if value else ""
             
-            logger.info(f"✅ Returning {len(valid_leads)} valid leads")
-            return jsonify(valid_leads)
+            has_data = any([
+                processed_row.get('Name', ''),
+                processed_row.get('Contact', ''), 
+                processed_row.get('WhatsApp ID', ''),
+                processed_row.get('Intent', '')
+            ])
             
-        except Exception as e:
-            logger.error(f"Error reading Google Sheets data: {str(e)}")
-            return jsonify({"error": f"Failed to read Google Sheets: {str(e)}"}), 500
+            if has_data:
+                valid_leads.append(processed_row)
+        
+        return jsonify(valid_leads)
             
     except Exception as e:
-        logger.error(f"Error in get_leads endpoint: {str(e)}")
+        logger.error(f"Error in get_leads: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/health", methods=["GET"])
@@ -1277,9 +1130,8 @@ def health():
         "timestamp": str(datetime.datetime.now()),
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
-        "redis_available": redis_client is not None,
-        "sessions_active": len(booking_sessions) if not redis_client else "Using Redis",
-        "version": "3.0 - Fixed Duplication Issues"
+        "active_sessions": len(booking_sessions),
+        "version": "3.0 - Fixed & Optimized"
     }
     return jsonify(status)
 
