@@ -8,18 +8,12 @@ import requests
 import logging
 import time
 import re
-from flask_cors import CORS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
-# ==============================
-# CORS CONFIGURATION
-# ==============================
-CORS(app)
 
 # ==============================
 # CONFIGURATION - AL BAHR SEA TOURS
@@ -456,7 +450,7 @@ def ask_for_people_count(to, name, contact, tour_type):
     send_whatsapp_message(to, "", interactive_data)
 
 def ask_for_date(to, name, contact, tour_type, people_count):
-    """Ask for preferred date"""
+    """Ask for preferred date using WhatsApp calendar picker"""
     # Update session with people count
     if to in booking_sessions:
         booking_sessions[to].update({
@@ -467,14 +461,18 @@ def ask_for_date(to, name, contact, tour_type, people_count):
             'people_count': people_count
         })
     
+    # For WhatsApp, we use text prompt since interactive calendar requires templates
+    # But we can make it more user-friendly
     send_whatsapp_message(to,
         f"📅 *Preferred Date*\n\n"
         f"Great choice! {people_count} for {tour_type}. 🎯\n\n"
-        "Please send your *preferred date*:\n\n"
-        "*Examples:*\n"
-        "• Tomorrow\n"
-        "• October 29\n"
-        "• Next Friday\n\n"
+        "Please send your *preferred date* in this format:\n\n"
+        "📋 *Format Examples:*\n"
+        "• **Tomorrow**\n"
+        "• **October 29**\n" 
+        "• **Next Friday**\n"
+        "• **15 November**\n"
+        "• **2024-12-25**\n\n"
         "We'll check availability for your chosen date! 📅")
 
 def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
@@ -943,6 +941,17 @@ Muscat, Oman""",
         return False
 
 # ==============================
+# CORS FIX - SIMPLE AND CLEAN
+# ==============================
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+# ==============================
 # WEBHOOK ENDPOINTS
 # ==============================
 
@@ -1116,9 +1125,12 @@ def get_leads():
         logger.error(f"Error in get_leads: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/broadcast", methods=["POST"])
+@app.route("/api/broadcast", methods=["POST", "OPTIONS"])
 def broadcast():
     """Send broadcast messages with better data handling"""
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+        
     try:
         data = request.get_json()
         logger.info(f"📨 Received broadcast request")
@@ -1247,7 +1259,7 @@ def health():
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
         "active_sessions": len(booking_sessions),
-        "version": "4.0 - Fixed CORS & Broadcast"
+        "version": "5.0 - Fixed Broadcast & CORS"
     }
     return jsonify(status)
 
