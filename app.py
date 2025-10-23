@@ -126,16 +126,17 @@ def clean_oman_number(number):
         return None
         
     # Handle Oman numbers specifically
-    if len(clean_number) == 8 and clean_number.startswith(('9', '7')):
-        # Local Oman number (9xxxxxxx or 7xxxxxxx)
+    if len(clean_number) == 8 and clean_number.startswith(('9', '7', '8')):
+        # Local Oman number (9xxxxxxx, 7xxxxxxx, or 8xxxxxxx)
         return '968' + clean_number
-    elif len(clean_number) == 11 and clean_number.startswith('9689'):
-        # Full Oman number with country code
+    elif len(clean_number) == 11 and clean_number.startswith('968'):
+        # Full Oman number with country code (9689xxxxxxx, 9687xxxxxxx, 9688xxxxxxx)
         return clean_number
     elif len(clean_number) == 12 and clean_number.startswith('968'):
         # Already in correct format
         return clean_number
     
+    logger.warning(f"Invalid Oman number format: {number} -> {clean_number}")
     return None
 
 def send_welcome_message(to):
