@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Al Bahr Sea Tours - Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root {
+            --primary: #0369a1;
+            --primary-dark: #0c4a6e;
+            --secondary: #0e7490;
+            --accent: #06b6d4;
+        }
+        
+        body { 
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .sidebar { 
+            transition: all 0.3s ease;
+            background: linear-gradient(180deg, var(--primary-dark) 0%, var(--primary) 100%);
+        }
+        
+        .card-hover { 
+            transition: all 0.3s ease; 
+        }
+        
+        .card-hover:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-left: 4px solid var(--primary);
+        }
+        
+        .nav-active {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .loading-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .wave-bg {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%230369a1' fill-opacity='0.1'%3E%3C/path%3E%3C/svg%3E");
+            background-size: cover;
+            background-position: bottom;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="fixed inset-0 bg-white z-50 flex items-center justify-center transition-opacity duration-300">
+        <div class="text-center">
+            <div class="w-16 h-16 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-600 loading-pulse">Loading Al Bahr Dashboard...</p>
+        </div>
+    </div>
+
+    <!-- Error Message -->
+    <div id="errorMessage" class="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg shadow-lg z-50 hidden">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <i data-feather="alert-triangle" class="w-5 h-5 mr-3"></i>
+                <div>
+                    <p class="font-medium" id="errorTitle">Connection Error</p>
+                    <p class="text-sm" id="errorText">Failed to load data from server</p>
+                </div>
+            </div>
+            <button onclick="hideError()" class="ml-4 text-red-500 hover:text-red-700">
+                <i data-feather="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    <div id="successMessage" class="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg shadow-lg z-50 hidden">
+        <div class="flex items-center">
+            <i data-feather="check-circle" class="w-5 h-5 mr-3"></i>
+            <div>
+                <p class="font-medium" id="successTitle">Success</p>
+                <p class="text-sm" id="successText">Operation completed successfully</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="sidebar w-64 text-white flex flex-col shadow-xl">
+            <div class="p-6 flex items-center space-x-3 border-b border-white border-opacity-20">
+                <div class="p-2 rounded-lg gradient-bg">
+                    <i data-feather="anchor" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-lg">Al Bahr Sea Tours</span>
+                    <p class="text-xs text-blue-200">Muscat, Oman</p>
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-6 space-y-2">
+                <a href="#" id="dashboardLink" class="nav-active flex items-center space-x-3 p-3 rounded-xl bg-white bg-opacity-20 shadow-lg transition-all">
+                    <i data-feather="home" class="w-5 h-5"></i>
+                    <span class="font-medium">Dashboard</span>
+                </a>
+                <a href="#" id="leadsLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
+                    <i data-feather="users" class="w-5 h-5"></i>
+                    <span class="font-medium">Leads Management</span>
+                </a>
+                <a href="#" id="broadcastLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
+                    <i data-feather="send" class="w-5 h-5"></i>
+                    <span class="font-medium">Broadcast</span>
+                </a>
+            </nav>
+            
+            <div class="p-6 border-t border-white border-opacity-20">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                        <i data-feather="user" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium">Admin User</p>
+                        <p class="text-xs text-blue-200" id="connectionStatus">Connected</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto bg-gray-50">
+            <header class="bg-white shadow-sm p-6 flex justify-between items-center border-b wave-bg">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800" id="pageTitle">Dashboard Overview</h1>
+                    <p class="text-gray-600" id="pageSubtitle">Al Bahr Sea Tours - Muscat, Oman</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                        <i data-feather="clock" class="w-4 h-4"></i>
+                        <span id="currentTime">--:--:--</span>
+                    </div>
+                    <button id="refreshBtn" class="flex items-center space-x-2 bg-blue-900 text-white px-4 py-2 rounded-xl hover:bg-opacity-90 transition-all shadow-lg">
+                        <i data-feather="refresh-cw" class="w-4 h-4"></i>
+                        <span>Refresh Data</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Sections -->
+            <div class="p-6 space-y-6" id="content">
+                <!-- Dashboard Overview -->
+                <div id="dashboardSection">
+                    <!-- Analytics Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Total Leads</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="totalLeads">0</h3>
+                                    <p class="text-green-600 text-sm mt-1" id="leadsGrowth">+0 today</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-blue-100">
+                                    <i data-feather="users" class="w-6 h-6 text-blue-900"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Tour Bookings</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="bookTours">0</h3>
+                                    <p class="text-green-600 text-sm mt-1" id="bookPercentage">0%</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-green-100">
+                                    <i data-feather="check-circle" class="w-6 h-6 text-green-600"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Tour Inquiries</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="inquireTours">0</h3>
+                                    <p class="text-yellow-600 text-sm mt-1" id="inquirePercentage">0%</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-yellow-100">
+                                    <i data-feather="help-circle" class="w-6 h-6 text-yellow-600"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Today's Leads</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="todayLeads">0</h3>
+                                    <p class="text-blue-600 text-sm mt-1" id="todayGrowth">+0</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-blue-100">
+                                    <i data-feather="trending-up" class="w-6 h-6 text-blue-600"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="font-bold text-lg mb-4">Tour Type Distribution</h3>
+                            <div class="h-64 flex items-center justify-center" id="tourChartContainer">
+                                <canvas id="tourChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="font-bold text-lg mb-4">Lead Intent Distribution</h3>
+                            <div class="h-64 flex items-center justify-center" id="intentChartContainer">
+                                <canvas id="intentChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="bg-white rounded-2xl shadow-lg p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg">Recent Leads</h3>
+                            <button id="viewAllLeads" class="text-blue-900 hover:text-blue-700 text-sm font-medium">View All Leads</button>
+                        </div>
+                        <div class="space-y-4" id="recentLeads">
+                            <div class="text-center py-8 text-gray-500">
+                                <i data-feather="users" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                <p>No leads data available</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leads Management -->
+                <div class="bg-white rounded-2xl shadow-lg overflow-hidden" id="leadsSection" style="display:none;">
+                    <div class="p-6 flex justify-between items-center border-b">
+                        <div>
+                            <h3 class="font-bold text-lg">Leads Management</h3>
+                            <p class="text-gray-600 text-sm">Manage and track all tour inquiries and bookings</p>
+                        </div>
+                        <div class="flex space-x-3">
+                            <div class="relative">
+                                <input type="text" id="searchLeads" placeholder="Search leads..." class="pl-10 pr-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
+                                <i data-feather="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
+                            </div>
+                            <button id="exportPDF" class="flex items-center space-x-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-200 transition-all">
+                                <i data-feather="download" class="w-4 h-4"></i>
+                                <span>Export PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200" id="leadsTable">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tour Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Intent</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">WhatsApp ID</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="leadsTableBody">
+                                <tr>
+                                    <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                                        <div class="flex items-center justify-center space-x-2">
+                                            <div class="w-4 h-4 border-2 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Loading leads from Google Sheets...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-4 border-t flex justify-between items-center bg-gray-50">
+                        <div class="text-sm text-gray-600" id="leadsPaginationInfo">Showing 0 of 0 leads</div>
+                        <div class="flex space-x-2" id="leadsPagination"></div>
+                    </div>
+                </div>
+
+                <!-- Broadcast Section -->
+                <div class="bg-white rounded-2xl shadow-lg p-6" id="broadcastSection" style="display:none;">
+                    <h3 class="font-bold text-lg mb-2">Broadcast Messages</h3>
+                    <p class="text-gray-600 mb-6">Send messages to different segments of your audience</p>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Select Segment</label>
+                                    <select id="segmentSelect" class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
+                                        <option value="all">All Leads</option>
+                                        <option value="book_tour">Tour Bookings</option>
+                                        <option value="inquire_tour">Tour Inquiries</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Recipients</label>
+                                    <div class="px-4 py-3 border rounded-xl bg-gray-50">
+                                        <span class="font-medium text-blue-900" id="recipientCount">0</span> users will receive this message
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">Message Content</label>
+                                <textarea id="broadcastMessage" class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900" rows="6" placeholder="Type your broadcast message here..."></textarea>
+                                <div class="flex justify-between items-center mt-2">
+                                    <span class="text-sm text-gray-500" id="charCount">0 characters</span>
+                                    <span class="text-sm text-gray-500">WhatsApp formatting supported</span>
+                                </div>
+                            </div>
+
+                            <!-- Sample Messages -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <h4 class="font-bold text-blue-800 mb-2">Sample Messages</h4>
+                                <div class="space-y-2">
+                                    <button onclick="loadSampleMessage('special_offer')" class="w-full text-left p-3 bg-white rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+                                        <span class="font-medium text-blue-700">Special Offers</span>
+                                        <p class="text-sm text-blue-600 mt-1">Promotions and discounts</p>
+                                    </button>
+                                    <button onclick="loadSampleMessage('new_tours')" class="w-full text-left p-3 bg-white rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+                                        <span class="font-medium text-blue-700">New Tours</span>
+                                        <p class="text-sm text-blue-600 mt-1">Announce new tour packages</p>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-4">
+                                <button id="previewBroadcast" class="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-xl font-medium hover:bg-gray-200 transition-all">
+                                    Preview Message
+                                </button>
+                                <button id="sendBroadcastBtn" class="flex-1 gradient-bg text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-all shadow-lg">
+                                    Send Broadcast Message
+                                </button>
+                            </div>
+
+                            <!-- Broadcast Progress -->
+                            <div id="broadcastProgress" class="hidden">
+                                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-sm font-medium text-blue-700">Sending messages...</span>
+                                        <span id="progressText" class="text-sm text-blue-600">0%</span>
+                                    </div>
+                                    <div class="w-full bg-blue-200 rounded-full h-2">
+                                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                    <div id="progressDetails" class="text-xs text-blue-600 mt-2"></div>
+                                </div>
+                            </div>
+
+                            <!-- Broadcast Results -->
+                            <div id="broadcastResults" class="hidden">
+                                <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+                                    <h4 class="font-medium text-green-800 mb-2">Broadcast Completed</h4>
+                                    <div id="resultsContent" class="text-sm text-green-700"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 rounded-xl p-6">
+                            <h4 class="font-bold mb-4">Broadcast Information</h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Selected Segment:</span>
+                                    <span class="font-medium" id="segmentInfo">All Leads</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Recipients:</span>
+                                    <span class="font-medium" id="recipientCountInfo">0</span>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Message Tips:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Use *bold* for emphasis</li>
+                                        <li>• Keep messages personal</li>
+                                        <li>• Include clear call-to-action</li>
+                                        <li>• Test with small group first</li>
+                                        <li>• Avoid spammy content</li>
+                                    </ul>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Best Practices:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Send during business hours</li>
+                                        <li>• Personalize with names</li>
+                                        <li>• Follow up after 24 hours</li>
+                                        <li>• Track engagement rates</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg">Message Preview</h3>
+                <button id="closePreview" class="text-gray-500 hover:text-gray-700">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="bg-gray-100 rounded-lg p-4 mb-4">
+                <p id="previewContent" class="text-gray-800 whitespace-pre-wrap"></p>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancelSend" class="flex-1 bg-gray-300 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button id="confirmSend" class="flex-1 bg-blue-900 text-white py-3 rounded-xl font-medium hover:bg-opacity-90">
+                    Confirm & Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            API_BASE_URL: "https://albahr-seatours.onrender.com",
+            REFRESH_INTERVAL: 30000,
+            ITEMS_PER_PAGE: 10
+        };
+
+        // State Management
+        let appState = {
+            leads: [],
+            filteredLeads: [],
+            currentPage: 1,
+            sortField: 'timestamp',
+            sortDirection: 'desc',
+            searchQuery: '',
+            charts: {},
+            broadcastInProgress: false
+        };
+
+        // Initialize Application
+        async function initApp() {
+            showLoading();
+            await loadAllData();
+            setupEventListeners();
+            startAutoRefresh();
+            updateCurrentTime();
+            hideLoading();
+        }
+
+        // Core Data Functions
+        async function loadAllData() {
+            try {
+                const response = await fetch(CONFIG.API_BASE_URL + '/api/leads');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const leads = await response.json();
+                
+                appState.leads = leads.map(lead => ({
+                    ...lead,
+                    timestamp: lead.Timestamp || '',
+                    name: lead.Name || '',
+                    contact: lead.Contact || '',
+                    whatsappId: lead['WhatsApp ID'] || '',
+                    intent: lead.Intent || '',
+                    tourType: lead['Tour Type'] || 'Not specified'
+                }));
+                
+                appState.filteredLeads = [...appState.leads];
+                
+                updateDashboard();
+                updateLeadsTable();
+                updateCharts();
+                
+                showSuccess('Data loaded successfully!', `Retrieved ${leads.length} leads from Google Sheets`);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showError('Connection Failed', `Cannot connect to server: ${error.message}`);
+            }
+        }
+
+        // PDF Export Function
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Title
+            doc.setFontSize(20);
+            doc.setTextColor(3, 105, 161);
+            doc.text('Al Bahr Sea Tours - Leads Report', 14, 22);
+            
+            // Date
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+            
+            // Table data
+            const tableData = appState.leads.map(lead => [
+                lead.timestamp,
+                lead.name || 'Unknown',
+                lead.contact || 'No contact',
+                lead.tourType,
+                lead.intent || 'Unknown',
+                lead.whatsappId || 'No ID'
+            ]);
+
+            // Table headers
+            const headers = [['Timestamp', 'Name', 'Contact', 'Tour Type', 'Intent', 'WhatsApp ID']];
+            
+            // Create table
+            doc.autoTable({
+                head: headers,
+                body: tableData,
+                startY: 40,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [3, 105, 161] },
+                alternateRowStyles: { fillColor: [240, 240, 240] },
+                margin: { top: 40 }
+            });
+
+            // Save PDF
+            doc.save(`Al-Bahr-Leads-${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // Sample Messages
+        function loadSampleMessage(type) {
+            const messages = {
+                special_offer: `🌊 *Special Summer Offer!* ☀️
+
+Hello! Al Bahr Sea Tours has an exclusive summer promotion just for you:
+
+🎯 *Summer Specials:*
+• *15% OFF* all dolphin watching tours
+• *Free snorkeling gear* with any booking
+• *Family package:* 4 people for the price of 3
+
+🏖️ *Perfect Summer Activities:*
+• Morning dolphin adventures 🐬
+• Afternoon snorkeling sessions 🤿
+• Sunset dhow cruises 🌅
+
+📅 *Valid until end of August*
+👨‍👩‍👧‍👦 *Perfect for family summer fun!*
+
+Ready to make summer memories? Book now! 📞 +968 24 123456`,
+
+                new_tours: `🚤 *New Tour Announcement!* 🌟
+
+We're excited to introduce our NEW tour packages at Al Bahr Sea Tours:
+
+🆕 *New Experiences:*
+• *Sunrise Fishing Trip* - 5:30 AM departure
+• *Private Island Picnic* - Exclusive beach experience
+• *Marine Photography Tour* - Capture underwater wonders
+
+🎯 *What's Included:*
+• Professional guides 🧭
+• All safety equipment 🦺
+• Refreshments & meals 🍎
+• Photography assistance 📸
+
+📅 *Bookings open now!*
+🌟 *Limited spots available*
+
+Discover new adventures with us! 🌊`
+            };
+            
+            document.getElementById('broadcastMessage').value = messages[type];
+            updateCharCount();
+            showSuccess('Sample Loaded', `Loaded ${type.replace('_', ' ')} sample message`);
+        }
+
+        // Dashboard Updates
+        function updateDashboard() {
+            const leads = appState.leads;
+            const total = leads.length;
+            const bookTours = leads.filter(l => l.intent.toLowerCase().includes("book")).length;
+            const inquireTours = leads.filter(l => l.intent.toLowerCase().includes("inquiry")).length;
+            
+            const today = new Date().toDateString();
+            const todayLeads = leads.filter(lead => {
+                const leadDate = new Date(lead.timestamp).toDateString();
+                return leadDate === today;
+            }).length;
+            
+            document.getElementById("totalLeads").textContent = total.toLocaleString();
+            document.getElementById("bookTours").textContent = bookTours.toLocaleString();
+            document.getElementById("inquireTours").textContent = inquireTours.toLocaleString();
+            document.getElementById("todayLeads").textContent = todayLeads.toLocaleString();
+            
+            const bookPercentage = total > 0 ? Math.round((bookTours / total) * 100) : 0;
+            const inquirePercentage = total > 0 ? Math.round((inquireTours / total) * 100) : 0;
+            
+            document.getElementById("bookPercentage").textContent = `${bookPercentage}%`;
+            document.getElementById("inquirePercentage").textContent = `${inquirePercentage}%`;
+            
+            document.getElementById("leadsGrowth").textContent = `+${todayLeads} today`;
+            document.getElementById("todayGrowth").textContent = `+${todayLeads}`;
+            
+            updateRecentLeads();
+        }
+
+        function updateRecentLeads() {
+            const recentLeadsContainer = document.getElementById('recentLeads');
+            const recentLeads = appState.leads
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 5);
+            
+            if (recentLeads.length === 0) {
+                recentLeadsContainer.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-feather="users" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No leads data available</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            recentLeadsContainer.innerHTML = recentLeads.map(lead => `
+                <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <i data-feather="user" class="w-5 h-5 text-blue-900"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-900">${lead.name || 'Unknown'}</p>
+                            <p class="text-sm text-gray-500">${lead.contact || 'No contact'} • ${lead.tourType}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                            lead.intent.toLowerCase().includes('book') 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                        }">
+                            ${lead.intent || 'Unknown'}
+                        </span>
+                        <p class="text-xs text-gray-500 mt-1">${formatDate(lead.timestamp)}</p>
+                    </div>
+                </div>
+            `).join('');
+            
+            feather.replace();
+        }
+
+        // Chart Functions
+        function updateCharts() {
+            updateTourTypeChart();
+            updateIntentChart();
+        }
+
+        function updateTourTypeChart() {
+            const ctx = document.getElementById('tourChart').getContext('2d');
+            const tourTypes = {};
+            
+            appState.leads.forEach(lead => {
+                const type = lead.tourType || 'Not specified';
+                tourTypes[type] = (tourTypes[type] || 0) + 1;
+            });
+
+            if (window.tourChartInstance) {
+                window.tourChartInstance.destroy();
+            }
+
+            window.tourChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(tourTypes),
+                    datasets: [{
+                        data: Object.values(tourTypes),
+                        backgroundColor: [
+                            '#0369a1', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd',
+                            '#0d9488', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        title: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateIntentChart() {
+            const ctx = document.getElementById('intentChart').getContext('2d');
+            const intents = {
+                'Book Tour': 0,
+                'Tour Inquiry': 0,
+                'Other': 0
+            };
+            
+            appState.leads.forEach(lead => {
+                const intent = lead.intent || 'Other';
+                if (intent.toLowerCase().includes('book')) {
+                    intents['Book Tour']++;
+                } else if (intent.toLowerCase().includes('inquiry')) {
+                    intents['Tour Inquiry']++;
+                } else {
+                    intents['Other']++;
+                }
+            });
+
+            if (window.intentChartInstance) {
+                window.intentChartInstance.destroy();
+            }
+
+            window.intentChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(intents),
+                    datasets: [{
+                        data: Object.values(intents),
+                        backgroundColor: ['#10b981', '#f59e0b', '#6b7280'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Leads Table Functions
+        function updateLeadsTable() {
+            const tableBody = document.getElementById('leadsTableBody');
+            const paginationInfo = document.getElementById('leadsPaginationInfo');
+            const paginationContainer = document.getElementById('leadsPagination');
+            
+            if (appState.filteredLeads.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                            No leads found matching your search criteria.
+                        </td>
+                    </tr>
+                `;
+                paginationInfo.textContent = 'Showing 0 of 0 leads';
+                paginationContainer.innerHTML = '';
+                return;
+            }
+            
+            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
+            const startIndex = (appState.currentPage - 1) * CONFIG.ITEMS_PER_PAGE;
+            const endIndex = startIndex + CONFIG.ITEMS_PER_PAGE;
+            const currentLeads = appState.filteredLeads.slice(startIndex, endIndex);
+            
+            tableBody.innerHTML = currentLeads.map(lead => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${formatDate(lead.timestamp)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        ${lead.name || 'Unknown'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.contact || 'No contact'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.tourType}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            lead.intent.toLowerCase().includes('book') 
+                                ? 'bg-green-100 text-green-800' 
+                                : lead.intent.toLowerCase().includes('inquiry')
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                        }">
+                            ${lead.intent || 'Unknown'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.whatsappId || 'No ID'}
+                    </td>
+                </tr>
+            `).join('');
+            
+            paginationInfo.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, appState.filteredLeads.length)} of ${appState.filteredLeads.length} leads`;
+            updatePaginationButtons(totalPages, paginationContainer);
+            feather.replace();
+        }
+
+        function updatePaginationButtons(totalPages, container) {
+            let buttons = '';
+            
+            buttons += `
+                <button onclick="changePage(${appState.currentPage - 1})" 
+                        ${appState.currentPage === 1 ? 'disabled' : ''}
+                        class="px-3 py-1 rounded-lg border ${appState.currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                    Previous
+                </button>
+            `;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                buttons += `
+                    <button onclick="changePage(${i})" 
+                            class="px-3 py-1 rounded-lg border ${appState.currentPage === i ? 'bg-blue-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            buttons += `
+                <button onclick="changePage(${appState.currentPage + 1})" 
+                        ${appState.currentPage === totalPages ? 'disabled' : ''}
+                        class="px-3 py-1 rounded-lg border ${appState.currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                    Next
+                </button>
+            `;
+            
+            container.innerHTML = buttons;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
+            if (page >= 1 && page <= totalPages) {
+                appState.currentPage = page;
+                updateLeadsTable();
+            }
+        }
+
+        function searchLeads() {
+            const query = document.getElementById('searchLeads').value.toLowerCase();
+            appState.searchQuery = query;
+            appState.currentPage = 1;
+            
+            if (!query) {
+                appState.filteredLeads = [...appState.leads];
+            } else {
+                appState.filteredLeads = appState.leads.filter(lead => 
+                    (lead.name && lead.name.toLowerCase().includes(query)) ||
+                    (lead.contact && lead.contact.toLowerCase().includes(query)) ||
+                    (lead.tourType && lead.tourType.toLowerCase().includes(query)) ||
+                    (lead.intent && lead.intent.toLowerCase().includes(query)) ||
+                    (lead.whatsappId && lead.whatsappId.toLowerCase().includes(query))
+                );
+            }
+            
+            updateLeadsTable();
+        }
+
+        // Broadcast Functions
+        function updateRecipientCount() {
+            const segment = document.getElementById('segmentSelect').value;
+            let count = 0;
+            
+            switch(segment) {
+                case 'all':
+                    count = appState.leads.length;
+                    break;
+                case 'book_tour':
+                    count = appState.leads.filter(l => l.intent.toLowerCase().includes('book')).length;
+                    break;
+                case 'inquire_tour':
+                    count = appState.leads.filter(l => l.intent.toLowerCase().includes('inquiry')).length;
+                    break;
+            }
+            
+            document.getElementById('recipientCount').textContent = count.toLocaleString();
+            document.getElementById('recipientCountInfo').textContent = count.toLocaleString();
+            document.getElementById('segmentInfo').textContent = 
+                document.getElementById('segmentSelect').options[document.getElementById('segmentSelect').selectedIndex].text;
+        }
+
+        function updateCharCount() {
+            const message = document.getElementById('broadcastMessage').value;
+            document.getElementById('charCount').textContent = `${message.length} characters`;
+        }
+
+        async function sendBroadcast() {
+            if (appState.broadcastInProgress) {
+                showError('Broadcast in Progress', 'Please wait for the current broadcast to complete.');
+                return;
+            }
+
+            const segment = document.getElementById('segmentSelect').value;
+            const message = document.getElementById('broadcastMessage').value.trim();
+            
+            if (!message) {
+                showError('Broadcast Failed', 'Please enter a message to send.');
+                return;
+            }
+
+            const recipientCount = document.getElementById('recipientCount').textContent;
+            if (recipientCount === '0') {
+                showError('No Recipients', 'No recipients found for the selected segment.');
+                return;
+            }
+
+            const warningMessage = `📢 Broadcast Alert:\n\n• Messages to users who haven't messaged in 24h require approved WhatsApp templates\n• Some numbers may need to be added to allowed list\n• Send to ${recipientCount} recipients?`;
+            
+            if (!confirm(warningMessage)) {
+                return;
+            }
+
+            appState.broadcastInProgress = true;
+            showLoading();
+            
+            try {
+                const response = await fetch(CONFIG.API_BASE_URL + '/api/broadcast', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        segment: segment,
+                        message: message
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || result.message || 'Broadcast failed');
+                }
+
+                if (result.status === 'no_recipients') {
+                    showError('No Recipients', result.debug_info?.message || result.message);
+                } else {
+                    let successMessage = `✅ Broadcast Completed!\n\n• Sent: ${result.sent} messages\n• Failed: ${result.failed} messages\n• Total: ${result.total_recipients} recipients`;
+                    
+                    if (result.failed > 0) {
+                        successMessage += `\n\n⚠️ Some failures may be due to:\n• WhatsApp numbers not in allowed list\n• Users outside 24-hour window\n• Invalid phone numbers`;
+                    }
+                    
+                    showSuccess('Broadcast Results', successMessage);
+                }
+                
+                document.getElementById('broadcastMessage').value = '';
+                updateCharCount();
+                
+            } catch (error) {
+                console.error('Broadcast error:', error);
+                showError('Broadcast Failed', error.message);
+            } finally {
+                appState.broadcastInProgress = false;
+                hideLoading();
+            }
+        }
+
+        function showPreview() {
+            const message = document.getElementById('broadcastMessage').value.trim();
+            if (!message) {
+                showError('Preview Failed', 'Please enter a message to preview.');
+                return;
+            }
+            
+            document.getElementById('previewContent').textContent = message;
+            document.getElementById('previewModal').classList.remove('hidden');
+        }
+
+        function hidePreview() {
+            document.getElementById('previewModal').classList.add('hidden');
+        }
+
+        function confirmSend() {
+            hidePreview();
+            sendBroadcast();
+        }
+
+        // Navigation Functions
+        function showSection(section) {
+            // Remove active class from all nav items
+            document.querySelectorAll('nav a').forEach(nav => {
+                nav.classList.remove('nav-active');
+                nav.classList.remove('bg-white', 'bg-opacity-20', 'shadow-lg');
+            });
+
+            // Add active class to clicked nav item
+            document.getElementById(`${section}Link`).classList.add('nav-active');
+            document.getElementById(`${section}Link`).classList.add('bg-white', 'bg-opacity-20', 'shadow-lg');
+            
+            // Hide all sections
+            ['dashboard', 'leads', 'broadcast'].forEach(sec => {
+                document.getElementById(`${sec}Section`).style.display = 'none';
+            });
+            
+            // Show selected section
+            document.getElementById(`${section}Section`).style.display = 'block';
+            
+            // Update page title
+            const titles = {
+                dashboard: 'Dashboard Overview',
+                leads: 'Leads Management',
+                broadcast: 'Broadcast Messages'
+            };
+            
+            const subtitles = {
+                dashboard: 'Al Bahr Sea Tours - Muscat, Oman',
+                leads: 'Manage and track all tour inquiries and bookings',
+                broadcast: 'Send targeted messages to your audience'
+            };
+            
+            document.getElementById('pageTitle').textContent = titles[section];
+            document.getElementById('pageSubtitle').textContent = subtitles[section];
+
+            if (section === 'broadcast') {
+                updateRecipientCount();
+            }
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Navigation
+            document.getElementById('dashboardLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('dashboard');
+            });
+            
+            document.getElementById('leadsLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('leads');
+            });
+            
+            document.getElementById('broadcastLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('broadcast');
+            });
+            
+            document.getElementById('viewAllLeads').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('leads');
+            });
+            
+            // Refresh button
+            document.getElementById('refreshBtn').addEventListener('click', loadAllData);
+            
+            // Search functionality
+            document.getElementById('searchLeads').addEventListener('input', searchLeads);
+            
+            // PDF Export
+            document.getElementById('exportPDF').addEventListener('click', exportToPDF);
+            
+            // Broadcast functionality
+            document.getElementById('segmentSelect').addEventListener('change', updateRecipientCount);
+            document.getElementById('broadcastMessage').addEventListener('input', updateCharCount);
+            document.getElementById('sendBroadcastBtn').addEventListener('click', sendBroadcast);
+            
+            // Preview functionality
+            document.getElementById('previewBroadcast').addEventListener('click', showPreview);
+            document.getElementById('closePreview').addEventListener('click', hidePreview);
+            document.getElementById('cancelSend').addEventListener('click', hidePreview);
+            document.getElementById('confirmSend').addEventListener('click', confirmSend);
+        }
+
+        // Utility Functions
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch {
+                return dateString;
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loadingScreen').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingScreen').classList.add('hidden');
+        }
+
+        function showError(title, message) {
+            document.getElementById('errorTitle').textContent = title;
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.remove('hidden');
+            
+            setTimeout(hideError, 5000);
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').classList.add('hidden');
+        }
+
+        function showSuccess(title, message) {
+            document.getElementById('successTitle').textContent = title;
+            document.getElementById('successText').textContent = message;
+            document.getElementById('successMessage').classList.remove('hidden');
+            
+            setTimeout(() => {
+                document.getElementById('successMessage').classList.add('hidden');
+            }, 3000);
+        }
+
+        function updateCurrentTime() {
+            document.getElementById('currentTime').textContent = new Date().toLocaleTimeString();
+        }
+
+        function startAutoRefresh() {
+            setInterval(() => {
+                loadAllData();
+                updateCurrentTime();
+            }, CONFIG.REFRESH_INTERVAL);
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            feather.replace();
+            initApp();
+        });
+    </script>
+</body>
+</html>
