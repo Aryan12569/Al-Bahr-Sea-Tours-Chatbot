@@ -19,9 +19,9 @@ app = Flask(__name__)
 # CONFIGURATION - AL BAHR SEA TOURS
 # ==============================
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "ALBAHRB0T")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
+WHATSAPP_TOKEN = os.environ.get("ACCESS_TOKEN")
 SHEET_NAME = os.environ.get("SHEET_NAME", "Al Bahr Bot Leads")
-WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID", "797371456799734")
+WHATSAPP_PHONE_ID = os.environ.get("PHONE_NUMBER_ID", "797371456799734")
 
 # Validate required environment variables
 missing_vars = []
