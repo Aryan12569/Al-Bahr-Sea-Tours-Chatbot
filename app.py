@@ -51,12 +51,12 @@ except Exception as e:
 # HELPER FUNCTIONS
 # ==============================
 
-def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified"):
+def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", people_count="Not specified"):
     """Add user entry to Google Sheet"""
     try:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type])
-        logger.info(f"Added lead to sheet: {name}, {contact}, {intent}, {tour_type}")
+        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, people_count])
+        logger.info(f"Added lead to sheet: {name}, {contact}, {intent}, {tour_type}, {booking_date}, {booking_time}, {people_count}")
         return True
     except Exception as e:
         logger.error(f"Failed to add lead to sheet: {str(e)}")
@@ -258,6 +258,246 @@ def send_booking_options(to):
     
     send_whatsapp_message(to, "", interactive_data)
 
+def start_booking_flow(to):
+    """Start the booking flow by asking for name"""
+    send_whatsapp_message(to, 
+        "📝 *Let's Book Your Tour!* 🎫\n\n"
+        "I'll help you book your sea adventure. 🌊\n\n"
+        "First, please send me your:\n\n"
+        "👤 *Full Name*\n\n"
+        "*Example:*\n"
+        "Ahmed Al Harthy")
+
+def ask_for_contact(to, name):
+    """Ask for contact after getting name"""
+    send_whatsapp_message(to, 
+        f"Perfect, {name}! 👋\n\n"
+        "Now please send me your:\n\n"
+        "📞 *Phone Number*\n\n"
+        "*Example:*\n"
+        "91234567")
+
+def ask_for_tour_type(to, name, contact):
+    """Ask for tour type using interactive list"""
+    interactive_data = {
+        "type": "list",
+        "header": {
+            "type": "text",
+            "text": "🚤 Choose Your Tour"
+        },
+        "body": {
+            "text": f"Great {name}! Which tour would you like to book?"
+        },
+        "action": {
+            "button": "Select Tour",
+            "sections": [
+                {
+                    "title": "Available Tours",
+                    "rows": [
+                        {
+                            "id": f"book_dolphin|{name}|{contact}",
+                            "title": "🐬 Dolphin Watching",
+                            "description": "2 hours • 25 OMR per person"
+                        },
+                        {
+                            "id": f"book_snorkeling|{name}|{contact}", 
+                            "title": "🤿 Snorkeling",
+                            "description": "3 hours • 35 OMR per person"
+                        },
+                        {
+                            "id": f"book_dhow|{name}|{contact}",
+                            "title": "⛵ Dhow Cruise", 
+                            "description": "2 hours • 40 OMR per person"
+                        },
+                        {
+                            "id": f"book_fishing|{name}|{contact}",
+                            "title": "🎣 Fishing Trip",
+                            "description": "4 hours • 50 OMR per person"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    send_whatsapp_message(to, "", interactive_data)
+
+def ask_for_people_count(to, name, contact, tour_type):
+    """Ask for number of people"""
+    interactive_data = {
+        "type": "list",
+        "header": {
+            "type": "text",
+            "text": "👥 Number of People"
+        },
+        "body": {
+            "text": f"How many people for the {tour_type}?"
+        },
+        "action": {
+            "button": "Select Count",
+            "sections": [
+                {
+                    "title": "Group Size",
+                    "rows": [
+                        {
+                            "id": f"people_1|{name}|{contact}|{tour_type}",
+                            "title": "👤 1 Person",
+                            "description": "Individual booking"
+                        },
+                        {
+                            "id": f"people_2|{name}|{contact}|{tour_type}", 
+                            "title": "👥 2 People",
+                            "description": "Couple or friends"
+                        },
+                        {
+                            "id": f"people_3|{name}|{contact}|{tour_type}",
+                            "title": "👨‍👩‍👦 3 People", 
+                            "description": "Small group"
+                        },
+                        {
+                            "id": f"people_4|{name}|{contact}|{tour_type}",
+                            "title": "👨‍👩‍👧‍👦 4 People",
+                            "description": "Family package"
+                        },
+                        {
+                            "id": f"people_5+|{name}|{contact}|{tour_type}",
+                            "title": "👨‍👩‍👧‍👦 5+ People",
+                            "description": "Large group (specify in chat)"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    send_whatsapp_message(to, "", interactive_data)
+
+def ask_for_date(to, name, contact, tour_type, people_count):
+    """Ask for preferred date using calendar"""
+    # For WhatsApp, we use a text prompt since calendar picker requires templates
+    send_whatsapp_message(to,
+        f"📅 *Preferred Date*\n\n"
+        f"Great choice! {people_count} for {tour_type}. 🎯\n\n"
+        "Please send your *preferred date*:\n\n"
+        "*Examples:*\n"
+        "• October 29\n"
+        "• Next Friday\n"
+        "• November 5\n"
+        "• Tomorrow\n\n"
+        "We'll check availability for your chosen date! 📅")
+
+def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
+    """Ask for preferred time"""
+    interactive_data = {
+        "type": "list",
+        "header": {
+            "type": "text",
+            "text": "🕒 Preferred Time"
+        },
+        "body": {
+            "text": f"Perfect! {booking_date} for {tour_type}.\n\nChoose your preferred time:"
+        },
+        "action": {
+            "button": "Select Time",
+            "sections": [
+                {
+                    "title": "Morning Sessions",
+                    "rows": [
+                        {
+                            "id": f"time_8am|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "title": "🌅 8:00 AM",
+                            "description": "Early morning adventure"
+                        },
+                        {
+                            "id": f"time_9am|{name}|{contact}|{tour_type}|{people_count}|{booking_date}", 
+                            "title": "☀️ 9:00 AM",
+                            "description": "Morning session"
+                        },
+                        {
+                            "id": f"time_10am|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "title": "🌞 10:00 AM", 
+                            "description": "Late morning"
+                        }
+                    ]
+                },
+                {
+                    "title": "Afternoon Sessions",
+                    "rows": [
+                        {
+                            "id": f"time_2pm|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "title": "🌇 2:00 PM",
+                            "description": "Afternoon adventure"
+                        },
+                        {
+                            "id": f"time_4pm|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "title": "🌅 4:00 PM",
+                            "description": "Late afternoon"
+                        },
+                        {
+                            "id": f"time_6pm|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "title": "🌆 6:00 PM",
+                            "description": "Evening session"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    send_whatsapp_message(to, "", interactive_data)
+
+def complete_booking(to, name, contact, tour_type, people_count, booking_date, booking_time):
+    """Complete the booking and save to sheet"""
+    # Save to Google Sheets
+    if sheet:
+        add_lead_to_sheet(
+            name=name,
+            contact=contact,
+            intent="Book Tour",
+            whatsapp_id=to,
+            tour_type=tour_type,
+            booking_date=booking_date,
+            booking_time=booking_time,
+            people_count=people_count
+        )
+    
+    # Send confirmation message
+    send_whatsapp_message(to,
+        f"🎉 *Booking Confirmed!* ✅\n\n"
+        f"Thank you {name}! Your tour has been booked successfully. 🐬\n\n"
+        f"📋 *Booking Details:*\n"
+        f"👤 Name: {name}\n"
+        f"📞 Contact: {contact}\n"
+        f"🚤 Tour: {tour_type}\n"
+        f"👥 People: {people_count}\n"
+        f"📅 Date: {booking_date}\n"
+        f"🕒 Time: {booking_time}\n\n"
+        f"💰 *Total: {calculate_price(tour_type, people_count)} OMR*\n\n"
+        f"Our team will contact you within 1 hour to confirm details. ⏰\n"
+        f"For immediate assistance: +968 24 123456 📞\n\n"
+        f"Get ready for an amazing sea adventure! 🌊")
+
+def calculate_price(tour_type, people_count):
+    """Calculate tour price based on type and people count"""
+    prices = {
+        "Dolphin Watching": 25,
+        "Snorkeling": 35,
+        "Dhow Cruise": 40,
+        "Fishing Trip": 50
+    }
+    
+    base_price = prices.get(tour_type, 30)
+    people = int(people_count.replace('+', '')) if people_count.replace('+', '').isdigit() else 1
+    
+    # Apply group discount for 4+ people
+    if people >= 4:
+        return base_price * people * 0.9  # 10% discount
+    
+    return base_price * people
+
+# Store temporary booking data (in production, use Redis or database)
+booking_sessions = {}
+
 def handle_keyword_questions(text, phone_number):
     """Handle direct keyword questions without menu"""
     text_lower = text.lower()
@@ -347,59 +587,63 @@ We're here to help you plan the perfect sea adventure! 🐬"""
         send_whatsapp_message(phone_number, response)
         return True
     
-    # Dolphin questions
-    elif any(word in text_lower for word in ['dolphin', 'dolphins']):
-        response = """🐬 *Dolphin Watching Tour* 🌊
-
-*Experience:* Swim with wild dolphins in their natural habitat! 
-*Duration:* 2 hours
-*Price:* 25 OMR per person
-
-*Includes:*
-• Expert marine guide 🧭
-• Safety equipment 🦺
-• Refreshments & water 🥤
-• Photography opportunities 📸
-
-*What to bring:*
-• Swimwear 🩱
-• Sunscreen 🧴
-• Towel 🧼
-• Camera 📷
-
-*Best time:* Morning tours (8AM-10AM) 
-*Success rate:* 95% dolphin sightings!"""
-        send_whatsapp_message(phone_number, response)
-        return True
-    
-    # Snorkeling questions
-    elif any(word in text_lower for word in ['snorkel', 'snorkeling', 'coral', 'fish']):
-        response = """🤿 *Snorkeling Adventure* 🐠
-
-*Explore:* Vibrant coral reefs & marine life
-*Duration:* 3 hours  
-*Price:* 35 OMR per person
-
-*Includes:*
-• Full snorkeling gear 🤿
-• Professional guide 🧭
-• Safety equipment 🦺
-• Snacks & drinks 🍎🥤
-
-*What to see:*
-• Colorful coral gardens 🌸
-• Tropical fish 🐠
-• Sea turtles 🐢
-• Amazing underwater world 🌊
-
-*Suitable for:* Beginners & experienced"""
-        send_whatsapp_message(phone_number, response)
-        return True
-    
     return False
 
 def handle_interaction(interaction_id, phone_number):
     """Handle list and button interactions"""
+    # Check if it's a booking flow interaction
+    if '|' in interaction_id:
+        parts = interaction_id.split('|')
+        action = parts[0]
+        
+        if action.startswith('book_') and len(parts) >= 3:
+            # Tour type selection
+            tour_type_map = {
+                'book_dolphin': 'Dolphin Watching',
+                'book_snorkeling': 'Snorkeling',
+                'book_dhow': 'Dhow Cruise',
+                'book_fishing': 'Fishing Trip'
+            }
+            
+            tour_type = tour_type_map.get(action)
+            name = parts[1]
+            contact = parts[2]
+            
+            ask_for_people_count(phone_number, name, contact, tour_type)
+            return True
+            
+        elif action.startswith('people_') and len(parts) >= 4:
+            # People count selection
+            people_count = action.replace('people_', '') + ' people'
+            name = parts[1]
+            contact = parts[2]
+            tour_type = parts[3]
+            
+            ask_for_date(phone_number, name, contact, tour_type, people_count)
+            return True
+            
+        elif action.startswith('time_') and len(parts) >= 6:
+            # Time selection - complete booking
+            time_map = {
+                'time_8am': '8:00 AM',
+                'time_9am': '9:00 AM',
+                'time_10am': '10:00 AM',
+                'time_2pm': '2:00 PM',
+                'time_4pm': '4:00 PM',
+                'time_6pm': '6:00 PM'
+            }
+            
+            booking_time = time_map.get(action, 'Not specified')
+            name = parts[1]
+            contact = parts[2]
+            tour_type = parts[3]
+            people_count = parts[4]
+            booking_date = parts[5]
+            
+            complete_booking(phone_number, name, contact, tour_type, people_count, booking_date, booking_time)
+            return True
+    
+    # Regular menu interactions
     responses = {
         # Welcome button
         "view_options": lambda: send_main_options_list(phone_number),
@@ -428,7 +672,7 @@ def handle_interaction(interaction_id, phone_number):
 *Best time:* Morning tours (8AM, 10AM)
 *Success rate:* 95% dolphin sightings! 
 
-Ready to swim with dolphins? 🐬""",
+Ready to book? Select 'Book Now'! 📅""",
 
         "snorkeling": """🤿 *Snorkeling Adventure* 🐠
 
@@ -453,7 +697,7 @@ Ready to swim with dolphins? 🐬""",
 *Suitable for:* Beginners to experienced
 *Location:* Protected coral bays 
 
-Book your underwater adventure! 🌊""",
+Ready to explore? Select 'Book Now'! 🌊""",
 
         "dhow_cruise": """⛵ *Traditional Dhow Cruise* 🌅
 
@@ -479,7 +723,7 @@ Book your underwater adventure! 🌊""",
 *Departure times:* 4:00 PM, 6:00 PM
 *Perfect for:* Couples, families, special occasions 
 
-Sail with us! ⛵""",
+Ready to sail? Select 'Book Now'! ⛵""",
 
         "fishing": """🎣 *Deep Sea Fishing Trip* 🐟
 
@@ -505,7 +749,7 @@ Sail with us! ⛵""",
 *Suitable for:* Beginners to experienced
 *Includes:* Fishing license
 
-Catch the big one! 🎣""",
+Ready to catch the big one? Select 'Book Now'! 🎣""",
 
         # Information options
         "pricing": """💰 *Tour Prices & Packages* 💵
@@ -602,26 +846,7 @@ Muscat, Oman
         "book_now": lambda: send_booking_options(phone_number),
         
         # Booking options
-        "book_tour": """📝 *Book Your Tour* 🎫
-
-To book your sea adventure, please send us:
-
-👤 *Your Name*
-📞 *Phone Number* 
-📅 *Preferred Tour Date*
-🕒 *Preferred Time*
-👥 *Number of People*
-🚤 *Tour Type* (Dolphin/Snorkeling/etc)
-
-*Example:*
-Ahmed | 91234567 | March 15 | 8:00 AM | 2 people | Dolphin Watching
-
-We'll confirm your booking within 1 hour! ⏰
-
-*Payment:* Cash at location or online transfer
-*Cancellation:* 24 hours notice required
-
-Ready for adventure? 🌊""",
+        "book_tour": lambda: start_booking_flow(phone_number),
         
         "inquire_tour": """💬 *Tour Inquiry* 🤔
 
@@ -693,6 +918,30 @@ def extract_name(row):
 def extract_tour_type(row):
     """Extract tour type from row"""
     field_names = ["Tour Type", "tour_type", "Tour", "tour"]
+    for field in field_names:
+        if field in row and row[field]:
+            return str(row[field]).strip()
+    return "Not specified"
+
+def extract_booking_date(row):
+    """Extract booking date from row"""
+    field_names = ["Booking Date", "booking_date", "Date", "date"]
+    for field in field_names:
+        if field in row and row[field]:
+            return str(row[field]).strip()
+    return "Not specified"
+
+def extract_booking_time(row):
+    """Extract booking time from row"""
+    field_names = ["Booking Time", "booking_time", "Time", "time"]
+    for field in field_names:
+        if field in row and row[field]:
+            return str(row[field]).strip()
+    return "Not specified"
+
+def extract_people_count(row):
+    """Extract people count from row"""
+    field_names = ["People Count", "people_count", "People", "people"]
     for field in field_names:
         if field in row and row[field]:
             return str(row[field]).strip()
@@ -806,28 +1055,9 @@ def webhook():
                 
                 logger.info(f"List option selected: {option_id} - {option_title} by {phone_number}")
                 
-                # Handle booking actions - FIXED: Save actual phone number
-                if option_id == "inquire_tour":
-                    if sheet:
-                        # Save with actual WhatsApp number instead of "Pending"
-                        add_lead_to_sheet("Pending", phone_number, "Tour Inquiry", phone_number, "General Inquiry")
-                    send_whatsapp_message(phone_number, "Thank you! We've noted your interest and will contact you with more information about our tours. 🌊")
-                    return jsonify({"status": "inquiry_saved"})
-                
-                if option_id == "book_tour":
-                    # For book tour, prompt for details
-                    send_whatsapp_message(phone_number, 
-                        "📝 *Book Your Tour* 🎫\n\nPlease send us:\n\n"
-                        "👤 Your Name\n"
-                        "📞 Phone Number\n" 
-                        "📅 Preferred Date\n"
-                        "🕒 Preferred Time\n"
-                        "👥 Number of People\n"
-                        "🚤 Tour Type\n\n"
-                        "*Example:*\n"
-                        "Ahmed | 91234567 | March 15 | 8:00 AM | 2 people | Dolphin Watching\n\n"
-                        "We'll confirm within 1 hour! ⏰")
-                    return jsonify({"status": "book_tour_prompt"})
+                # Handle booking flow interactions
+                if handle_interaction(option_id, phone_number):
+                    return jsonify({"status": "booking_flow_handled"})
                 
                 # Handle other list selections
                 handle_interaction(option_id, phone_number)
@@ -863,50 +1093,55 @@ def webhook():
                 send_welcome_message(phone_number)
                 return jsonify({"status": "welcome_sent"})
             
-            # Check for booking data (name and contact with tour details)
+            # Handle booking flow - name input
+            if phone_number in booking_sessions and booking_sessions[phone_number].get('expecting_name'):
+                # Store name and ask for contact
+                booking_sessions[phone_number] = {
+                    'name': text,
+                    'expecting_contact': True
+                }
+                ask_for_contact(phone_number, text)
+                return jsonify({"status": "name_received"})
+            
+            # Handle booking flow - contact input
+            elif phone_number in booking_sessions and booking_sessions[phone_number].get('expecting_contact'):
+                # Store contact and ask for tour type
+                name = booking_sessions[phone_number]['name']
+                contact = text
+                ask_for_tour_type(phone_number, name, contact)
+                del booking_sessions[phone_number]  # Clean up session
+                return jsonify({"status": "contact_received"})
+            
+            # Handle booking flow - date input
+            elif phone_number in booking_sessions and booking_sessions[phone_number].get('expecting_date'):
+                # Store date and ask for time
+                session_data = booking_sessions[phone_number]
+                name = session_data['name']
+                contact = session_data['contact']
+                tour_type = session_data['tour_type']
+                people_count = session_data['people_count']
+                booking_date = text
+                
+                ask_for_time(phone_number, name, contact, tour_type, people_count, booking_date)
+                del booking_sessions[phone_number]  # Clean up session
+                return jsonify({"status": "date_received"})
+            
+            # Check if it's a simple name/contact format for quick booking
             if any(char.isdigit() for char in text) and len(text.split()) >= 2:
                 try:
-                    # Parse booking information
-                    parts = [p.strip() for p in text.replace("|", " ").split() if p.strip()]
+                    # Parse simple name and contact
+                    parts = [p.strip() for p in text.split() if p.strip()]
                     if len(parts) >= 2:
                         name = ' '.join(parts[:-1])
                         contact = parts[-1]
                         
-                        # Try to extract tour type from message
-                        tour_type = "Not specified"
-                        text_lower = text.lower()
-                        if 'dolphin' in text_lower:
-                            tour_type = "Dolphin Watching"
-                        elif 'snorkel' in text_lower:
-                            tour_type = "Snorkeling"
-                        elif 'dhow' in text_lower or 'cruise' in text_lower:
-                            tour_type = "Dhow Cruise"
-                        elif 'fish' in text_lower:
-                            tour_type = "Fishing Trip"
+                        # Check if it's just name and contact (quick booking start)
+                        if len(parts) == 2 and contact.isdigit() and len(contact) >= 7:
+                            ask_for_tour_type(phone_number, name, contact)
+                            return jsonify({"status": "quick_booking_started"})
                         
-                        if sheet:
-                            add_lead_to_sheet(name, contact, "Book Tour", phone_number, tour_type)
-                        
-                        send_whatsapp_message(phone_number, 
-                            f"🎫 *Booking Received!* ✅\n\n"
-                            f"Thank you {name}! We have received your tour booking request. 🐬\n\n"
-                            f"👤 *Name:* {name}\n"
-                            f"📞 *Contact:* {contact}\n"
-                            f"🚤 *Tour Type:* {tour_type}\n\n"
-                            f"Our team will contact you within 1 hour to confirm your booking. ⏰\n\n"
-                            f"For immediate assistance: +968 24 123456 📞\n\n"
-                            f"Get ready for an amazing sea adventure! 🌊")
-                        return jsonify({"status": "booked"})
-                    
                 except Exception as e:
-                    logger.error(f"Booking parsing error: {str(e)}")
-                    send_whatsapp_message(phone_number, 
-                        "Please send your booking information as:\n\n"
-                        "Name | Phone Number | Date | Time | People | Tour Type\n\n"
-                        "*Example:*\n"
-                        "Ahmed | 91234567 | March 15 | 8:00 AM | 2 people | Dolphin Watching\n\n"
-                        "Or simply send: Ahmed 91234567")
-                    return jsonify({"status": "booking_error"})
+                    logger.error(f"Name parsing error: {str(e)}")
             
             # If no specific match and no keyword handled, send welcome message
             send_welcome_message(phone_number)
@@ -995,6 +1230,9 @@ def broadcast():
                     "name": name,
                     "intent": intent,
                     "tour_type": extract_tour_type(row),
+                    "booking_date": extract_booking_date(row),
+                    "booking_time": extract_booking_time(row),
+                    "people_count": extract_people_count(row),
                     "original_data": row
                 })
         
@@ -1083,6 +1321,9 @@ def debug_leads():
             intent = extract_intent(row)
             name = extract_name(row)
             tour_type = extract_tour_type(row)
+            booking_date = extract_booking_date(row)
+            booking_time = extract_booking_time(row)
+            people_count = extract_people_count(row)
             
             clean_whatsapp_id = clean_whatsapp_number(whatsapp_id)
             is_valid = len(clean_whatsapp_id) >= 11 if clean_whatsapp_id else False
@@ -1096,6 +1337,9 @@ def debug_leads():
                 "cleaned_whatsapp": clean_whatsapp_id,
                 "intent": intent,
                 "tour_type": tour_type,
+                "booking_date": booking_date,
+                "booking_time": booking_time,
+                "people_count": people_count,
                 "is_valid": is_valid,
                 "is_book_tour": is_book_tour,
                 "is_inquire_tour": is_inquire_tour
@@ -1116,42 +1360,6 @@ def debug_leads():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/api/cleanup-data", methods=["POST"])
-def cleanup_data():
-    """Cleanup existing data - fix Register Later users with 'Pending' contact"""
-    try:
-        if not sheet:
-            return jsonify({"error": "Google Sheets not available"}), 500
-        
-        all_records = sheet.get_all_records()
-        updated_count = 0
-        
-        for i, row in enumerate(all_records):
-            intent = extract_intent(row)
-            contact = extract_whatsapp_id(row)
-            whatsapp_id = extract_whatsapp_id(row)
-            
-            # Fix Tour Inquiry users who have 'Pending' as contact but have WhatsApp ID
-            if (intent and "inquiry" in intent.lower() and 
-                contact and contact.lower() == "pending" and 
-                whatsapp_id and whatsapp_id.lower() != "pending" and 
-                is_valid_whatsapp_number(whatsapp_id)):
-                
-                # Update the Contact field with the WhatsApp ID
-                sheet.update_cell(i+2, 3, whatsapp_id)  # +2 because of header row, 3 is Contact column
-                updated_count += 1
-                logger.info(f"Updated row {i+2}: Contact = {whatsapp_id}")
-        
-        return jsonify({
-            "status": "cleanup_completed",
-            "updated_records": updated_count,
-            "message": f"Successfully updated {updated_count} records"
-        })
-        
-    except Exception as e:
-        logger.error(f"Cleanup error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
 @app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint"""
@@ -1160,7 +1368,7 @@ def health():
         "timestamp": str(datetime.datetime.now()),
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
-        "version": "1.0"
+        "version": "2.0"
     }
     return jsonify(status)
 
