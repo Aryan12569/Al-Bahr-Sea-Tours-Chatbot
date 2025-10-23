@@ -8,12 +8,18 @@ import requests
 import logging
 import time
 import re
+from flask_cors import CORS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# ==============================
+# CORS CONFIGURATION
+# ==============================
+CORS(app)
 
 # ==============================
 # CONFIGURATION - AL BAHR SEA TOURS
@@ -130,13 +136,12 @@ def clean_oman_number(number):
         # Local Oman number (9xxxxxxx, 7xxxxxxx, or 8xxxxxxx)
         return '968' + clean_number
     elif len(clean_number) == 11 and clean_number.startswith('968'):
-        # Full Oman number with country code (9689xxxxxxx, 9687xxxxxxx, 9688xxxxxxx)
+        # Full Oman number with country code
         return clean_number
     elif len(clean_number) == 12 and clean_number.startswith('968'):
         # Already in correct format
         return clean_number
     
-    logger.warning(f"Invalid Oman number format: {number} -> {clean_number}")
     return None
 
 def send_welcome_message(to):
@@ -320,7 +325,7 @@ def start_inquiry_flow(to):
         "• How many people? 👥\n" 
         "• Preferred date? 📅\n"
         "• Any questions? ❓\n\n"
-        "We'll contact you shortly with all details! 📞")
+        "Our team will contact you shortly with all details! 📞")
 
 def ask_for_contact(to, name):
     """Ask for contact after getting name"""
@@ -938,18 +943,6 @@ Muscat, Oman""",
         return False
 
 # ==============================
-# CORS HEADERS
-# ==============================
-
-@app.after_request
-def after_request(response):
-    """Add CORS headers to all responses"""
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-
-# ==============================
 # WEBHOOK ENDPOINTS
 # ==============================
 
@@ -1080,7 +1073,7 @@ def webhook():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ==============================
-# DASHBOARD ENDPOINTS
+# DASHBOARD API ENDPOINTS
 # ==============================
 
 @app.route("/api/leads", methods=["GET"])
@@ -1123,6 +1116,128 @@ def get_leads():
         logger.error(f"Error in get_leads: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/broadcast", methods=["POST"])
+def broadcast():
+    """Send broadcast messages with better data handling"""
+    try:
+        data = request.get_json()
+        logger.info(f"📨 Received broadcast request")
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        segment = data.get("segment", "all")
+        message = data.get("message", "").strip()
+        
+        if not message:
+            return jsonify({"error": "Message cannot be empty"}), 400
+            
+        if not sheet:
+            return jsonify({"error": "Google Sheets not available"}), 500
+        
+        all_records = sheet.get_all_records()
+        logger.info(f"📊 Found {len(all_records)} total records")
+        
+        target_leads = []
+        
+        for row in all_records:
+            whatsapp_id = None
+            # Try multiple field names for WhatsApp ID
+            for field in ["WhatsApp ID", "WhatsAppID", "whatsapp_id", "WhatsApp", "Phone", "Contact", "Mobile"]:
+                if field in row and row[field]:
+                    whatsapp_id = str(row[field]).strip()
+                    if whatsapp_id and whatsapp_id.lower() not in ["pending", "none", "null", ""]:
+                        break
+            
+            if not whatsapp_id:
+                continue
+                
+            clean_whatsapp_id = clean_oman_number(whatsapp_id)
+            if not clean_whatsapp_id:
+                continue
+                
+            # Extract intent
+            intent = ""
+            for field in ["Intent", "intent", "Status", "status"]:
+                if field in row and row[field]:
+                    intent = str(row[field]).strip()
+                    break
+            
+            # Check segment filter
+            intent_lower = intent.lower() if intent else ""
+            
+            if segment == "all":
+                target_leads.append({
+                    "whatsapp_id": clean_whatsapp_id,
+                    "name": row.get('Name', '') or row.get('name', ''),
+                    "intent": intent
+                })
+            elif segment == "book_tour" and "book" in intent_lower:
+                target_leads.append({
+                    "whatsapp_id": clean_whatsapp_id,
+                    "name": row.get('Name', '') or row.get('name', ''),
+                    "intent": intent
+                })
+            elif segment == "inquire_tour" and "inquiry" in intent_lower:
+                target_leads.append({
+                    "whatsapp_id": clean_whatsapp_id,
+                    "name": row.get('Name', '') or row.get('name', ''),
+                    "intent": intent
+                })
+        
+        logger.info(f"🎯 Targeting {len(target_leads)} recipients for segment '{segment}'")
+        
+        if len(target_leads) == 0:
+            return jsonify({
+                "status": "no_recipients", 
+                "sent": 0,
+                "failed": 0,
+                "total_recipients": 0,
+                "message": "No valid recipients found for the selected segment."
+            })
+        
+        sent_count = 0
+        failed_count = 0
+        
+        for i, lead in enumerate(target_leads):
+            try:
+                if i > 0:
+                    time.sleep(2)  # Rate limiting
+                
+                # Personalize message
+                personalized_message = message
+                if lead["name"] and lead["name"] not in ["", "Pending", "Unknown", "None"]:
+                    personalized_message = f"Hello {lead['name']}! 👋\n\n{message}"
+                
+                logger.info(f"📤 Sending to {lead['whatsapp_id']} - {lead['name']}")
+                
+                success = send_whatsapp_message(lead["whatsapp_id"], personalized_message)
+                
+                if success:
+                    sent_count += 1
+                else:
+                    failed_count += 1
+                    
+            except Exception as e:
+                failed_count += 1
+                logger.error(f"Error sending to {lead['whatsapp_id']}: {str(e)}")
+        
+        result = {
+            "status": "broadcast_completed",
+            "sent": sent_count,
+            "failed": failed_count,
+            "total_recipients": len(target_leads),
+            "segment": segment,
+            "message": f"Broadcast completed: {sent_count} sent, {failed_count} failed"
+        }
+        
+        logger.info(f"📬 Broadcast result: {result}")
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Broadcast error: {str(e)}")
+        return jsonify({"error": f"Broadcast failed: {str(e)}"}), 500
+
 @app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint"""
@@ -1132,7 +1247,7 @@ def health():
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
         "active_sessions": len(booking_sessions),
-        "version": "3.0 - Fixed & Optimized"
+        "version": "4.0 - Fixed CORS & Broadcast"
     }
     return jsonify(status)
 
