@@ -81,6 +81,7 @@
             padding: 12px 16px;
             border-radius: 18px;
             position: relative;
+            animation: fadeIn 0.3s ease-in;
         }
 
         .admin-message {
@@ -108,6 +109,12 @@
             font-size: 0.7rem;
             padding: 2px 6px;
             border-radius: 10px;
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 4px;
         }
     </style>
 </head>
@@ -409,7 +416,13 @@
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div class="lg:col-span-2">
                             <div class="bg-gray-50 rounded-xl p-6">
-                                <h4 class="font-bold mb-4">Active Sessions</h4>
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 class="font-bold">Active Sessions</h4>
+                                    <button onclick="refreshActiveSessions()" class="text-blue-900 hover:text-blue-700 text-sm flex items-center space-x-1">
+                                        <i data-feather="refresh-cw" class="w-4 h-4"></i>
+                                        <span>Refresh</span>
+                                    </button>
+                                </div>
                                 <div id="activeSessionsList" class="space-y-3">
                                     <div class="text-center py-8 text-gray-500">
                                         <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
@@ -601,7 +614,7 @@
                 : 'https://al-bahr-sea-tours-chatbot.onrender.com',
             REFRESH_INTERVAL: 30000,
             ITEMS_PER_PAGE: 10,
-            CHAT_POLL_INTERVAL: 5000 // Poll for new messages every 5 seconds
+            CHAT_POLL_INTERVAL: 3000 // Poll for new messages every 3 seconds for better real-time updates
         };
 
         // State Management
@@ -617,7 +630,8 @@
             activeSessions: {},
             currentChatUser: null,
             chatPollInterval: null,
-            currentChatHistory: []
+            currentChatHistory: [],
+            lastMessageId: 0 // Track last message ID to prevent duplicates
         };
 
         // Initialize Application
@@ -680,10 +694,11 @@
             }
         }
 
-        // Chat Functions - UPDATED FOR TWO-WAY CHAT
+        // Enhanced Chat Functions
         async function openChat(phoneNumber, name = 'Customer') {
             try {
                 appState.currentChatUser = { phoneNumber, name };
+                appState.lastMessageId = 0; // Reset message tracking
                 
                 // Get user session info
                 const sessionResponse = await fetch(`${CONFIG.API_BASE_URL}/api/user_session/${phoneNumber}`);
@@ -702,10 +717,11 @@
                     statusElement.className = 'text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full';
                 }
                 
-                // Load chat history
+                // Load complete chat history
                 await loadChatHistory(phoneNumber);
                 
                 document.getElementById('chatModal').classList.remove('hidden');
+                document.getElementById('chatMessageInput').focus();
                 feather.replace();
                 
                 // Start polling for new messages
@@ -725,6 +741,11 @@
                 if (response.ok) {
                     appState.currentChatHistory = data.messages || [];
                     renderChatMessages();
+                    
+                    // Update last message ID
+                    if (appState.currentChatHistory.length > 0) {
+                        appState.lastMessageId = Math.max(...appState.currentChatHistory.map(msg => msg.id || 0));
+                    }
                 } else {
                     throw new Error(data.error || 'Failed to load chat history');
                 }
@@ -748,17 +769,35 @@
                 return;
             }
             
-            chatMessages.innerHTML = appState.currentChatHistory.map(msg => `
+            // Sort messages by timestamp to ensure correct order
+            const sortedMessages = [...appState.currentChatHistory].sort((a, b) => 
+                new Date(a.timestamp) - new Date(b.timestamp)
+            );
+            
+            chatMessages.innerHTML = sortedMessages.map(msg => {
+                const messageTime = new Date(msg.timestamp).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                return `
                 <div class="chat-message ${msg.sender === 'admin' ? 'admin-message' : 'user-message'}">
-                    <div class="text-sm">${msg.message}</div>
-                    <div class="text-xs text-gray-500 mt-1 text-right">
-                        ${new Date(msg.timestamp).toLocaleTimeString()} • ${msg.sender === 'admin' ? 'You' : 'Customer'}
+                    <div class="text-sm">${escapeHtml(msg.message)}</div>
+                    <div class="message-time text-right">
+                        ${messageTime} • ${msg.sender === 'admin' ? 'You' : 'Customer'}
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
             
+            // Scroll to bottom
             chatMessages.scrollTop = chatMessages.scrollHeight;
             feather.replace();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         async function sendChatMessage() {
@@ -770,16 +809,18 @@
             }
             
             try {
-                // Add message to chat UI immediately
+                // Clear input immediately
+                messageInput.value = '';
+                
+                // Add message to chat UI immediately with optimistic update
                 const tempMessage = {
                     message: message,
                     sender: 'admin',
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    id: Date.now() // Temporary ID
                 };
                 appState.currentChatHistory.push(tempMessage);
                 renderChatMessages();
-                
-                messageInput.value = '';
                 
                 // Send to backend
                 const response = await fetch(CONFIG.API_BASE_URL + '/api/send_message', {
@@ -799,9 +840,16 @@
                     throw new Error(result.error || 'Failed to send message');
                 }
                 
+                // Reload chat history to get the actual stored message
+                await loadChatHistory(appState.currentChatUser.phoneNumber);
+                
             } catch (error) {
                 console.error('Error sending message:', error);
                 showError('Send Failed', error.message);
+                
+                // Remove optimistic update if failed
+                appState.currentChatHistory = appState.currentChatHistory.filter(msg => msg.id !== Date.now());
+                renderChatMessages();
             }
         }
 
@@ -811,12 +859,34 @@
                 clearInterval(appState.chatPollInterval);
             }
             
-            // Poll for new messages
+            // Poll for new messages more frequently
             appState.chatPollInterval = setInterval(async () => {
                 if (appState.currentChatUser && appState.currentChatUser.phoneNumber === phoneNumber) {
-                    await loadChatHistory(phoneNumber);
+                    await checkForNewMessages(phoneNumber);
                 }
             }, CONFIG.CHAT_POLL_INTERVAL);
+        }
+
+        async function checkForNewMessages(phoneNumber) {
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}/api/user_messages/${phoneNumber}`);
+                const data = await response.json();
+                
+                if (response.ok && data.messages) {
+                    const newMessages = data.messages.filter(msg => (msg.id || 0) > appState.lastMessageId);
+                    
+                    if (newMessages.length > 0) {
+                        // Update last message ID
+                        appState.lastMessageId = Math.max(...data.messages.map(msg => msg.id || 0));
+                        
+                        // Add new messages to current history
+                        appState.currentChatHistory = [...appState.currentChatHistory, ...newMessages];
+                        renderChatMessages();
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for new messages:', error);
+            }
         }
 
         function stopChatPolling() {
@@ -828,6 +898,7 @@
 
         function insertQuickMessage(message) {
             document.getElementById('chatMessageInput').value = message;
+            document.getElementById('chatMessageInput').focus();
         }
 
         function closeChat() {
@@ -835,6 +906,7 @@
             document.getElementById('chatModal').classList.add('hidden');
             appState.currentChatUser = null;
             appState.currentChatHistory = [];
+            appState.lastMessageId = 0;
         }
 
         // Update active sessions display
@@ -882,6 +954,22 @@
             }
             
             feather.replace();
+        }
+
+        async function refreshActiveSessions() {
+            try {
+                const response = await fetch(CONFIG.API_BASE_URL + '/api/active_sessions');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    appState.activeSessions = data.sessions || {};
+                    updateActiveSessions();
+                    showSuccess('Refreshed', 'Active sessions updated');
+                }
+            } catch (error) {
+                console.error('Error refreshing sessions:', error);
+                showError('Refresh Failed', 'Could not update active sessions');
+            }
         }
 
         // Update dashboard with chat stats
@@ -955,7 +1043,7 @@
             feather.replace();
         }
 
-        // Update leads table with chat buttons - REMOVED OFFLINE RESTRICTION
+        // Update leads table with chat buttons
         function updateLeadsTable() {
             const tableBody = document.getElementById('leadsTableBody');
             const paginationInfo = document.getElementById('leadsPaginationInfo');
@@ -1004,7 +1092,7 @@
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        <button onclick="openChat('${lead.whatsappId}', '${lead.name || 'Customer'}')" 
+                        <button onclick="openChat('${lead.whatsappId}', '${(lead.name || 'Customer').replace(/'/g, "\\'")}')" 
                                 class="flex items-center space-x-1 bg-blue-900 text-white px-3 py-1 rounded-lg hover:bg-opacity-90 transition-all text-xs font-medium">
                             <i data-feather="message-circle" class="w-3 h-3"></i>
                             <span>Chat</span>
@@ -1018,7 +1106,7 @@
             feather.replace();
         }
 
-        // Broadcast Functions - RESTORED
+        // Broadcast Functions
         function updateRecipientCount() {
             const segment = document.getElementById('segmentSelect').value;
             let count = 0;
