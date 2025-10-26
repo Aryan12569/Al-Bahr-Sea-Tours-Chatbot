@@ -7,3 +7,4 @@ PyJWT==2.8.0
 cryptography==41.0.4
 urllib3==1.26.16
 gunicorn==21.2.0
+APScheduler==3.10.1
