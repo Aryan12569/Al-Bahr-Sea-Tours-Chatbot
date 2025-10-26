@@ -8,9 +8,6 @@ import requests
 import logging
 import time
 import re
-from collections import defaultdict
-import threading
-from datetime import timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +22,6 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "ALBAHRB0T")
 WHATSAPP_TOKEN = os.environ.get("ACCESS_TOKEN")
 SHEET_NAME = os.environ.get("SHEET_NAME", "Al Bahr Bot Leads")
 WHATSAPP_PHONE_ID = os.environ.get("PHONE_NUMBER_ID", "797371456799734")
-ADMIN_NUMBER = os.environ.get("ADMIN_NUMBER", "96878505509")  # Your admin number
 
 # Validate required environment variables
 missing_vars = []
@@ -55,296 +51,15 @@ except Exception as e:
 booking_sessions = {}
 
 # ==============================
-# REMINDER SYSTEM
+# HELPER FUNCTIONS
 # ==============================
 
-def schedule_reminder(booking_data):
-    """Schedule a reminder for 24 hours before the booking"""
-    try:
-        booking_date = parse_date(booking_data.get('booking_date'))
-        if not booking_date:
-            return
-        
-        # Calculate reminder time (24 hours before booking)
-        reminder_time = booking_date - timedelta(days=1)
-        
-        # For demo purposes, we'll schedule reminders 2 minutes from now
-        # In production, you'd use a proper task scheduler like Celery
-        demo_reminder_time = datetime.datetime.now() + timedelta(minutes=2)
-        
-        logger.info(f"📅 Scheduled reminder for {booking_data.get('name')} on {reminder_time}")
-        
-        # Store reminder in session for demo (in production, use database)
-        phone = booking_data.get('whatsapp_id')
-        if phone not in booking_sessions:
-            booking_sessions[phone] = {}
-        
-        booking_sessions[phone]['reminder_scheduled'] = True
-        booking_sessions[phone]['reminder_time'] = demo_reminder_time
-        booking_sessions[phone]['booking_details'] = booking_data
-        
-    except Exception as e:
-        logger.error(f"❌ Error scheduling reminder: {str(e)}")
-
-def send_reminder(phone_number, booking_details):
-    """Send reminder message to customer"""
-    try:
-        name = booking_details.get('name', 'there')
-        tour_type = booking_details.get('tour_type', 'your tour')
-        booking_date = booking_details.get('booking_date', 'the scheduled date')
-        booking_time = booking_details.get('booking_time', 'the scheduled time')
-        people_count = booking_details.get('people_count', 'your group')
-        
-        reminder_message = (
-            f"🔔 *Booking Reminder* 🔔\n\n"
-            f"Hello {name}! 👋\n\n"
-            f"Just a friendly reminder about your upcoming sea adventure! 🌊\n\n"
-            f"📋 *Booking Details:*\n"
-            f"🚤 Tour: {tour_type}\n"
-            f"👥 People: {people_count}\n"
-            f"📅 Date: {booking_date}\n"
-            f"🕒 Time: {booking_time}\n\n"
-            f"📍 *Meeting Point:*\n"
-            f"Marina Bandar Al Rowdha, Muscat\n"
-            f"https://maps.app.goo.gl/albahrseatours\n\n"
-            f"⏰ *Please arrive 30 minutes before departure*\n"
-            f"🎒 *What to bring:* Swimwear, sunscreen, towel, camera\n\n"
-            f"We're excited to see you tomorrow! 🐬\n\n"
-            f"Need to make changes? Contact us: +968 24 123456 📞"
-        )
-        
-        success = send_whatsapp_message(phone_number, reminder_message)
-        if success:
-            logger.info(f"✅ Reminder sent successfully to {phone_number}")
-            return True
-        else:
-            logger.error(f"❌ Failed to send reminder to {phone_number}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"🚨 Error sending reminder: {str(e)}")
-        return False
-
-def check_and_send_reminders():
-    """Check for pending reminders and send them"""
-    try:
-        current_time = datetime.datetime.now()
-        reminders_sent = 0
-        
-        for phone, session_data in list(booking_sessions.items()):
-            if (session_data.get('reminder_scheduled') and 
-                session_data.get('reminder_time') and 
-                current_time >= session_data['reminder_time']):
-                
-                # Send reminder
-                if send_reminder(phone, session_data.get('booking_details', {})):
-                    # Mark as sent
-                    session_data['reminder_sent'] = True
-                    session_data['reminder_scheduled'] = False
-                    reminders_sent += 1
-                    logger.info(f"✅ Auto-reminder sent to {phone}")
-        
-        if reminders_sent > 0:
-            logger.info(f"📬 Sent {reminders_sent} automatic reminders")
-            
-    except Exception as e:
-        logger.error(f"❌ Error in reminder checker: {str(e)}")
-
-def send_manual_reminder(admin_phone, target_phone=None):
-    """Send manual reminder (admin command)"""
-    try:
-        if not target_phone:
-            # Send to all upcoming bookings
-            upcoming_bookings = get_upcoming_bookings()
-            reminders_sent = 0
-            
-            for booking in upcoming_bookings:
-                phone = booking.get('whatsapp_id')
-                if phone and send_reminder(phone, booking):
-                    reminders_sent += 1
-            
-            return f"✅ Sent reminders to {reminders_sent} customers"
-        
-        else:
-            # Send to specific phone number
-            booking = find_booking_by_phone(target_phone)
-            if booking:
-                if send_reminder(target_phone, booking):
-                    return f"✅ Reminder sent to {booking.get('name', 'customer')}"
-                else:
-                    return "❌ Failed to send reminder"
-            else:
-                return "❌ No upcoming booking found for this number"
-                
-    except Exception as e:
-        logger.error(f"❌ Error in manual reminder: {str(e)}")
-        return f"❌ Error: {str(e)}"
-
-def get_upcoming_bookings():
-    """Get all upcoming bookings from Google Sheets"""
-    try:
-        if not sheet:
-            return []
-        
-        all_records = sheet.get_all_records()
-        upcoming_bookings = []
-        today = datetime.date.today()
-        
-        for record in all_records:
-            if (record.get('Intent', '').lower() == 'book tour' and
-                record.get('Booking Date') and record.get('Booking Date').lower() not in ['not specified', 'pending']):
-                
-                booking_date = parse_date(record.get('Booking Date'))
-                if booking_date and booking_date >= today:
-                    upcoming_bookings.append({
-                        'name': record.get('Name', ''),
-                        'whatsapp_id': record.get('WhatsApp ID', ''),
-                        'tour_type': record.get('Tour Type', ''),
-                        'booking_date': record.get('Booking Date', ''),
-                        'booking_time': record.get('Booking Time', ''),
-                        'people_count': record.get('People Count', '')
-                    })
-        
-        return upcoming_bookings
-        
-    except Exception as e:
-        logger.error(f"❌ Error getting upcoming bookings: {str(e)}")
-        return []
-
-def find_booking_by_phone(phone_number):
-    """Find upcoming booking by phone number"""
-    try:
-        clean_phone = clean_oman_number(phone_number)
-        upcoming_bookings = get_upcoming_bookings()
-        
-        for booking in upcoming_bookings:
-            if clean_oman_number(booking.get('whatsapp_id', '')) == clean_phone:
-                return booking
-        
-        return None
-        
-    except Exception as e:
-        logger.error(f"❌ Error finding booking by phone: {str(e)}")
-        return None
-
-# Start background reminder checker
-def start_reminder_checker():
-    """Start background thread to check reminders"""
-    def reminder_loop():
-        while True:
-            try:
-                check_and_send_reminders()
-                time.sleep(60)  # Check every minute
-            except Exception as e:
-                logger.error(f"❌ Reminder loop error: {str(e)}")
-                time.sleep(60)
-    
-    reminder_thread = threading.Thread(target=reminder_loop, daemon=True)
-    reminder_thread.start()
-    logger.info("✅ Reminder checker started")
-
-# ==============================
-# ADMIN COMMANDS SYSTEM
-# ==============================
-
-def handle_admin_command(phone_number, text):
-    """Handle admin commands"""
-    try:
-        # Check if the number is admin
-        clean_admin = clean_oman_number(ADMIN_NUMBER)
-        clean_sender = clean_oman_number(phone_number)
-        
-        if clean_sender != clean_admin:
-            return False, "Not authorized"
-        
-        command = text.strip().lower()
-        
-        if command == 'reminder':
-            result = send_manual_reminder(phone_number)
-            return True, result
-            
-        elif command.startswith('reminder '):
-            target_phone = command.replace('reminder ', '').strip()
-            result = send_manual_reminder(phone_number, target_phone)
-            return True, result
-            
-        elif command == 'stats':
-            stats = get_booking_stats()
-            return True, stats
-            
-        elif command == 'help':
-            help_text = (
-                "🔧 *Admin Commands:*\n\n"
-                "• `reminder` - Send reminders to all upcoming bookings\n"
-                "• `reminder 91234567` - Send reminder to specific number\n"
-                "• `stats` - Get booking statistics\n"
-                "• `help` - Show this help message\n\n"
-                "📊 *Auto-reminders* are sent 24h before bookings"
-            )
-            return True, help_text
-            
-        else:
-            return True, "❌ Unknown command. Type 'help' for available commands."
-            
-    except Exception as e:
-        logger.error(f"❌ Admin command error: {str(e)}")
-        return False, f"❌ Command error: {str(e)}"
-
-def get_booking_stats():
-    """Get booking statistics for admin"""
-    try:
-        if not sheet:
-            return "❌ Google Sheets not available"
-        
-        all_records = sheet.get_all_records()
-        total_bookings = 0
-        upcoming_bookings = 0
-        today = datetime.date.today()
-        
-        for record in all_records:
-            if record.get('Intent', '').lower() == 'book tour':
-                total_bookings += 1
-                booking_date = parse_date(record.get('Booking Date', ''))
-                if booking_date and booking_date >= today:
-                    upcoming_bookings += 1
-        
-        stats = (
-            f"📊 *Booking Statistics*\n\n"
-            f"• Total Bookings: {total_bookings}\n"
-            f"• Upcoming Bookings: {upcoming_bookings}\n"
-            f"• Reminders Scheduled: {len([s for s in booking_sessions.values() if s.get('reminder_scheduled')])}\n\n"
-            f"⏰ Last checked: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        )
-        
-        return stats
-        
-    except Exception as e:
-        logger.error(f"❌ Error getting stats: {str(e)}")
-        return f"❌ Error getting statistics: {str(e)}"
-
-# ==============================
-# CORE HELPER FUNCTIONS
-# ==============================
-
-def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", people_count="Not specified", notes=""):
+def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", people_count="Not specified"):
     """Add user entry to Google Sheet"""
     try:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, people_count, notes])
-        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}, {tour_type}")
-        
-        # Schedule reminder for bookings
-        if intent.lower() == "book tour" and booking_date.lower() not in ["not specified", "pending"]:
-            booking_data = {
-                'name': name,
-                'whatsapp_id': whatsapp_id,
-                'tour_type': tour_type,
-                'booking_date': booking_date,
-                'booking_time': booking_time,
-                'people_count': people_count
-            }
-            schedule_reminder(booking_data)
-            
+        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, people_count])
+        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to add lead to sheet: {str(e)}")
@@ -422,165 +137,6 @@ def clean_oman_number(number):
         return clean_number
     
     return None
-
-def parse_date(date_str):
-    """Parse various date formats to datetime.date"""
-    try:
-        if not date_str or date_str.lower() in ['not specified', 'pending']:
-            return None
-            
-        # Try different date formats
-        formats = [
-            '%Y-%m-%d',
-            '%d/%m/%Y',
-            '%m/%d/%Y',
-            '%d-%m-%Y',
-            '%B %d',
-            '%b %d',
-            '%d %B'
-        ]
-        
-        for fmt in formats:
-            try:
-                return datetime.datetime.strptime(date_str, fmt).date()
-            except ValueError:
-                continue
-                
-        # Handle relative dates
-        today = datetime.date.today()
-        date_lower = date_str.lower()
-        
-        if 'tomorrow' in date_lower:
-            return today + timedelta(days=1)
-        elif 'today' in date_lower:
-            return today
-        elif 'monday' in date_lower:
-            days_ahead = (0 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        elif 'tuesday' in date_lower:
-            days_ahead = (1 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        elif 'wednesday' in date_lower:
-            days_ahead = (2 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        elif 'thursday' in date_lower:
-            days_ahead = (3 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        elif 'friday' in date_lower:
-            days_ahead = (4 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        elif 'saturday' in date_lower:
-            days_ahead = (5 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        elif 'sunday' in date_lower:
-            days_ahead = (6 - today.weekday()) % 7
-            return today + timedelta(days=days_ahead)
-        
-        return None
-    except Exception as e:
-        logger.error(f"Error parsing date {date_str}: {str(e)}")
-        return None
-
-def check_availability(tour_type, booking_date, booking_time, people_count):
-    """Check if the requested tour slot is available"""
-    try:
-        if not sheet:
-            return True, "No booking data available"
-        
-        all_records = sheet.get_all_records()
-        
-        # Parse the requested date and time
-        requested_date = parse_date(booking_date)
-        requested_time = parse_time(booking_time)
-        
-        if not requested_date:
-            return True, "Could not parse date"
-        
-        # Count existing bookings for the same tour, date, and time
-        conflicting_bookings = 0
-        max_capacity = {
-            "Dolphin Watching": 8,
-            "Snorkeling": 6,
-            "Dhow Cruise": 10,
-            "Fishing Trip": 4
-        }
-        
-        for record in all_records:
-            if (record.get('Tour Type') == tour_type and 
-                record.get('Intent', '').lower() == 'book tour' and
-                record.get('Booking Date') and record.get('Booking Time')):
-                
-                record_date = parse_date(record.get('Booking Date'))
-                record_time = parse_time(record.get('Booking Time'))
-                
-                if record_date == requested_date and record_time == requested_time:
-                    # Add people from this booking
-                    people_str = record.get('People Count', '1')
-                    people = extract_people_count(people_str)
-                    conflicting_bookings += people
-        
-        # Add the new booking's people count
-        new_people = extract_people_count(people_count)
-        total_people = conflicting_bookings + new_people
-        capacity = max_capacity.get(tour_type, 6)
-        
-        if total_people > capacity:
-            return False, f"❌ Sorry! This time slot is fully booked.\n\nOnly {capacity - conflicting_bookings} spots left, but you requested {new_people} people.\n\nPlease choose a different time or date."
-        else:
-            available_spots = capacity - total_people
-            return True, f"✅ Time slot available! {available_spots} spots remaining after your booking."
-            
-    except Exception as e:
-        logger.error(f"Error checking availability: {str(e)}")
-        return True, "Availability check temporarily unavailable"
-
-def parse_time(time_str):
-    """Parse time string to standardized format"""
-    try:
-        if not time_str or time_str.lower() in ['not specified', 'pending']:
-            return None
-            
-        # Extract time parts
-        time_match = re.search(r'(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)?', time_str, re.IGNORECASE)
-        if time_match:
-            hour = int(time_match.group(1))
-            minute = int(time_match.group(2) or 0)
-            period = time_match.group(3)
-            
-            if period and period.lower() == 'pm' and hour < 12:
-                hour += 12
-            elif period and period.lower() == 'am' and hour == 12:
-                hour = 0
-                
-            return f"{hour:02d}:{minute:02d}"
-        
-        return None
-    except Exception as e:
-        logger.error(f"Error parsing time {time_str}: {str(e)}")
-        return None
-
-def extract_people_count(people_str):
-    """Extract number of people from various formats"""
-    try:
-        if not people_str:
-            return 1
-            
-        # Handle "5+ people" format
-        if '+' in people_str:
-            return int(people_str.split('+')[0])
-        
-        # Extract digits
-        numbers = re.findall(r'\d+', people_str)
-        if numbers:
-            return int(numbers[0])
-        
-        return 1
-    except:
-        return 1
-
-# ==============================
-# CHATBOT FLOW FUNCTIONS (ESSENTIALS)
-# ==============================
 
 def send_welcome_message(to):
     """Send initial welcome message"""
@@ -735,305 +291,35 @@ def start_booking_flow(to):
         "Ahmed Al Harthy")
 
 def start_inquiry_flow(to):
-    """Start the FORCED inquiry flow"""
+    """Start the inquiry flow"""
     # Clear any existing session
     if to in booking_sessions:
         del booking_sessions[to]
     
-    # Create new session for forced inquiry
+    # Create new session
     booking_sessions[to] = {
-        'step': 'awaiting_inquiry_tour',
-        'flow': 'inquiry',
-        'inquiry_data': {}
+        'step': 'awaiting_inquiry',
+        'flow': 'inquiry'
     }
+    
+    # Save inquiry intent to Google Sheets immediately
+    add_lead_to_sheet(
+        name="Pending",
+        contact="Pending", 
+        intent="Tour Inquiry",
+        whatsapp_id=to,
+        tour_type="Not specified"
+    )
     
     send_whatsapp_message(to,
         "💬 *Tour Inquiry* 🤔\n\n"
-        "I'd love to help you plan your perfect sea adventure! 🌊\n\n"
-        "Let me gather some details to provide you with the best recommendations...\n\n"
-        "First, which tour are you interested in? 🚤")
-
-def ask_for_inquiry_tour_type(to):
-    """Ask for tour type in inquiry flow"""
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🚤 Interested Tour"
-        },
-        "body": {
-            "text": "Which sea adventure catches your interest?"
-        },
-        "action": {
-            "button": "Select Tour",
-            "sections": [
-                {
-                    "title": "Available Tours",
-                    "rows": [
-                        {
-                            "id": f"inquiry_dolphin|{to}",
-                            "title": "🐬 Dolphin Watching",
-                            "description": "Swim with wild dolphins"
-                        },
-                        {
-                            "id": f"inquiry_snorkeling|{to}", 
-                            "title": "🤿 Snorkeling",
-                            "description": "Explore coral reefs"
-                        },
-                        {
-                            "id": f"inquiry_dhow|{to}",
-                            "title": "⛵ Dhow Cruise", 
-                            "description": "Traditional sunset cruise"
-                        },
-                        {
-                            "id": f"inquiry_fishing|{to}",
-                            "title": "🎣 Fishing Trip",
-                            "description": "Deep sea fishing adventure"
-                        },
-                        {
-                            "id": f"inquiry_unsure|{to}",
-                            "title": "🤔 Not Sure Yet",
-                            "description": "Need recommendations"
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
-
-def ask_for_inquiry_people_count(to, tour_type):
-    """Ask for number of people in inquiry flow"""
-    # Update session with tour type
-    if to in booking_sessions:
-        booking_sessions[to]['inquiry_data']['tour_type'] = tour_type
-        booking_sessions[to]['step'] = 'awaiting_inquiry_people'
-    
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "👥 Group Size"
-        },
-        "body": {
-            "text": f"Great! {tour_type} is amazing! 🎯\n\nHow many people will be joining?"
-        },
-        "action": {
-            "button": "Select Count",
-            "sections": [
-                {
-                    "title": "Standard Groups",
-                    "rows": [
-                        {
-                            "id": f"inquiry_people_1|{to}|{tour_type}",
-                            "title": "👤 1 Person",
-                            "description": "Solo adventure"
-                        },
-                        {
-                            "id": f"inquiry_people_2|{to}|{tour_type}", 
-                            "title": "👥 2 People",
-                            "description": "Couple or friends"
-                        },
-                        {
-                            "id": f"inquiry_people_3|{to}|{tour_type}",
-                            "title": "👨‍👩‍👦 3 People", 
-                            "description": "Small group"
-                        },
-                        {
-                            "id": f"inquiry_people_4|{to}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 4 People",
-                            "description": "Family package"
-                        }
-                    ]
-                },
-                {
-                    "title": "Larger Groups",
-                    "rows": [
-                        {
-                            "id": f"inquiry_people_5|{to}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 5 People",
-                            "description": "Medium group"
-                        },
-                        {
-                            "id": f"inquiry_people_6|{to}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 6 People",
-                            "description": "Large group"
-                        },
-                        {
-                            "id": f"inquiry_people_custom|{to}|{tour_type}",
-                            "title": "🔢 Custom Number",
-                            "description": "7+ people or special request"
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
-
-def ask_for_custom_people_count(to, tour_type):
-    """Ask for custom people count"""
-    if to in booking_sessions:
-        booking_sessions[to]['step'] = 'awaiting_inquiry_custom_people'
-    
-    send_whatsapp_message(to,
-        f"🔢 *Custom Group Size*\n\n"
-        f"For {tour_type}, we can accommodate larger groups! 🎉\n\n"
-        "Please tell me:\n\n"
-        "• How many people exactly? 👥\n"
-        "• Any special requirements? 🌟\n\n"
-        "*Example:*\n"
-        "\"8 people, including 2 children\"\n"
-        "or\n"
-        "\"15 people for corporate event\"")
-
-def ask_for_inquiry_date(to, tour_type, people_count):
-    """Ask for preferred date in inquiry flow"""
-    # Update session with people count
-    if to in booking_sessions:
-        booking_sessions[to]['inquiry_data']['people_count'] = people_count
-        booking_sessions[to]['step'] = 'awaiting_inquiry_date'
-    
-    send_whatsapp_message(to,
-        f"📅 *Preferred Date*\n\n"
-        f"Perfect! {people_count} for {tour_type}. 🎯\n\n"
-        "When would you like to go?\n\n"
-        "Please send your preferred date:\n\n"
-        "*Format Examples:*\n"
-        "• **Tomorrow**\n"
-        "• **October 29**\n" 
-        "• **Next Friday**\n"
-        "• **15 November**\n"
-        "• **2024-12-25**\n\n"
-        "I'll check availability for you! 📅")
-
-def ask_for_inquiry_time(to, tour_type, people_count, booking_date):
-    """Ask for preferred time in inquiry flow"""
-    # Update session with date
-    if to in booking_sessions:
-        booking_sessions[to]['inquiry_data']['booking_date'] = booking_date
-        booking_sessions[to]['step'] = 'awaiting_inquiry_time'
-    
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🕒 Preferred Time"
-        },
-        "body": {
-            "text": f"Great! {booking_date} for {tour_type}.\n\nChoose your preferred time:"
-        },
-        "action": {
-            "button": "Select Time",
-            "sections": [
-                {
-                    "title": "Morning Sessions",
-                    "rows": [
-                        {
-                            "id": f"inquiry_time_8am|{to}|{tour_type}|{people_count}|{booking_date}",
-                            "title": "🌅 8:00 AM",
-                            "description": "Early morning adventure"
-                        },
-                        {
-                            "id": f"inquiry_time_9am|{to}|{tour_type}|{people_count}|{booking_date}", 
-                            "title": "☀️ 9:00 AM",
-                            "description": "Morning session"
-                        },
-                        {
-                            "id": f"inquiry_time_10am|{to}|{tour_type}|{people_count}|{booking_date}",
-                            "title": "🌞 10:00 AM", 
-                            "description": "Late morning"
-                        }
-                    ]
-                },
-                {
-                    "title": "Afternoon Sessions",
-                    "rows": [
-                        {
-                            "id": f"inquiry_time_2pm|{to}|{tour_type}|{people_count}|{booking_date}",
-                            "title": "🌇 2:00 PM",
-                            "description": "Afternoon adventure"
-                        },
-                        {
-                            "id": f"inquiry_time_4pm|{to}|{tour_type}|{people_count}|{booking_date}",
-                            "title": "🌅 4:00 PM",
-                            "description": "Late afternoon"
-                        },
-                        {
-                            "id": f"inquiry_time_6pm|{to}|{tour_type}|{people_count}|{booking_date}",
-                            "title": "🌆 6:00 PM",
-                            "description": "Evening session"
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
-
-def ask_for_inquiry_questions(to, tour_type, people_count, booking_date, booking_time):
-    """Ask for additional questions in inquiry flow"""
-    # Update session with time
-    if to in booking_sessions:
-        booking_sessions[to]['inquiry_data']['booking_time'] = booking_time
-        booking_sessions[to]['step'] = 'awaiting_inquiry_questions'
-    
-    # Check availability
-    is_available, availability_msg = check_availability(tour_type, booking_date, booking_time, people_count)
-    
-    send_whatsapp_message(to,
-        f"🎯 *Perfect! Almost done...*\n\n"
-        f"{availability_msg}\n\n"
-        f"📋 *Your Inquiry Details:*\n"
-        f"🚤 Tour: {tour_type}\n"
-        f"👥 People: {people_count}\n"
-        f"📅 Date: {booking_date}\n"
-        f"🕒 Time: {booking_time}\n\n"
-        "Finally, do you have any specific questions or special requirements? ❓\n\n"
-        "*Examples:*\n"
-        "• Dietary restrictions\n"
-        "• Celebration occasion\n"
-        "• Experience level\n"
-        "• Photography requests\n\n"
-        "Or just type 'No questions' if you're all set! ✅")
-
-def complete_inquiry(to, name, contact, tour_type, people_count, booking_date, booking_time, questions):
-    """Complete the inquiry and save to sheet"""
-    # Save detailed inquiry to Google Sheets
-    notes = f"Inquiry questions: {questions}" if questions and questions.lower() != 'no questions' else "No specific questions"
-    
-    success = add_lead_to_sheet(
-        name=name,
-        contact=contact,
-        intent="Detailed Tour Inquiry",
-        whatsapp_id=to,
-        tour_type=tour_type,
-        booking_date=booking_date,
-        booking_time=booking_time,
-        people_count=people_count,
-        notes=notes
-    )
-    
-    # Clear the session
-    if to in booking_sessions:
-        del booking_sessions[to]
-    
-    # Send confirmation message
-    send_whatsapp_message(to,
-        f"✅ *Inquiry Received!* 📝\n\n"
-        f"Thank you for your detailed inquiry! Our team will contact you shortly with personalized recommendations. 📞\n\n"
-        f"📋 *Your Inquiry Summary:*\n"
-        f"🚤 Tour: {tour_type}\n"
-        f"👥 People: {people_count}\n"
-        f"📅 Date: {booking_date}\n"
-        f"🕒 Time: {booking_time}\n\n"
-        f"💬 Your notes: {questions if questions else 'No specific questions'}\n\n"
-        f"⏰ *Expected response:* Within 1-2 hours\n"
-        f"📞 *Immediate assistance:* +968 24 123456\n\n"
-        f"We're excited to help you plan an unforgettable sea adventure! 🌊")
+        "Got questions? We're here to help! 😊\n\n"
+        "Please tell us about your interest:\n\n"
+        "• Which tour interests you? 🚤\n"
+        "• How many people? 👥\n" 
+        "• Preferred date? 📅\n"
+        "• Any questions? ❓\n\n"
+        "Our team will contact you shortly with all details! 📞")
 
 def ask_for_contact(to, name):
     """Ask for contact after getting name"""
@@ -1128,7 +414,7 @@ def ask_for_people_count(to, name, contact, tour_type):
             "button": "Select Count",
             "sections": [
                 {
-                    "title": "Standard Groups",
+                    "title": "Group Size",
                     "rows": [
                         {
                             "id": f"people_1|{name}|{contact}|{tour_type}",
@@ -1149,26 +435,11 @@ def ask_for_people_count(to, name, contact, tour_type):
                             "id": f"people_4|{name}|{contact}|{tour_type}",
                             "title": "👨‍👩‍👧‍👦 4 People",
                             "description": "Family package"
-                        }
-                    ]
-                },
-                {
-                    "title": "Larger Groups",
-                    "rows": [
-                        {
-                            "id": f"people_5|{name}|{contact}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 5 People",
-                            "description": "Medium group"
                         },
                         {
-                            "id": f"people_6|{name}|{contact}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 6 People",
-                            "description": "Large group"
-                        },
-                        {
-                            "id": f"people_custom|{name}|{contact}|{tour_type}",
-                            "title": "🔢 Custom Number",
-                            "description": "7+ people or special request"
+                            "id": f"people_5+|{name}|{contact}|{tour_type}",
+                            "title": "👨‍👩‍👧‍👦 5+ People",
+                            "description": "Large group (specify in chat)"
                         }
                     ]
                 }
@@ -1178,24 +449,8 @@ def ask_for_people_count(to, name, contact, tour_type):
     
     send_whatsapp_message(to, "", interactive_data)
 
-def ask_for_custom_people(to, name, contact, tour_type):
-    """Ask for custom people count in booking flow"""
-    if to in booking_sessions:
-        booking_sessions[to]['step'] = 'awaiting_custom_people'
-    
-    send_whatsapp_message(to,
-        f"🔢 *Custom Group Size*\n\n"
-        f"Great! We can accommodate larger groups for {tour_type}! 🎉\n\n"
-        "Please tell me:\n\n"
-        "• Exact number of people 👥\n"
-        "• Any special requirements 🌟\n\n"
-        "*Example:*\n"
-        "\"8 people\"\n"
-        "or\n"
-        "\"12 people including 3 children\"")
-
 def ask_for_date(to, name, contact, tour_type, people_count):
-    """Ask for preferred date"""
+    """Ask for preferred date using WhatsApp calendar picker"""
     # Update session with people count
     if to in booking_sessions:
         booking_sessions[to].update({
@@ -1206,17 +461,19 @@ def ask_for_date(to, name, contact, tour_type, people_count):
             'people_count': people_count
         })
     
+    # For WhatsApp, we use text prompt since interactive calendar requires templates
+    # But we can make it more user-friendly
     send_whatsapp_message(to,
         f"📅 *Preferred Date*\n\n"
         f"Great choice! {people_count} for {tour_type}. 🎯\n\n"
-        "Please send your preferred date:\n\n"
-        "*Format Examples:*\n"
+        "Please send your *preferred date* in this format:\n\n"
+        "📋 *Format Examples:*\n"
         "• **Tomorrow**\n"
         "• **October 29**\n" 
         "• **Next Friday**\n"
         "• **15 November**\n"
         "• **2024-12-25**\n\n"
-        "I'll check availability for you! 📅")
+        "We'll check availability for your chosen date! 📅")
 
 def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
     """Ask for preferred time"""
@@ -1492,59 +749,6 @@ def handle_interaction(interaction_id, phone_number):
             
             complete_booking(phone_number, name, contact, tour_type, people_count, booking_date, booking_time)
             return True
-            
-        elif action.startswith('inquiry_') and len(parts) >= 2:
-            # Inquiry flow interactions
-            if action.startswith('inquiry_dolphin'):
-                ask_for_inquiry_people_count(phone_number, 'Dolphin Watching')
-                return True
-            elif action.startswith('inquiry_snorkeling'):
-                ask_for_inquiry_people_count(phone_number, 'Snorkeling')
-                return True
-            elif action.startswith('inquiry_dhow'):
-                ask_for_inquiry_people_count(phone_number, 'Dhow Cruise')
-                return True
-            elif action.startswith('inquiry_fishing'):
-                ask_for_inquiry_people_count(phone_number, 'Fishing Trip')
-                return True
-            elif action.startswith('inquiry_unsure'):
-                send_whatsapp_message(phone_number, 
-                    "🤔 *Need Recommendations?*\n\n"
-                    "Perfect! Let me suggest some options based on popular choices:\n\n"
-                    "🐬 *Dolphin Watching* - Most popular, great for families\n"
-                    "🤿 *Snorkeling* - Best for adventure seekers\n"
-                    "⛵ *Dhow Cruise* - Perfect for couples & sunsets\n"
-                    "🎣 *Fishing Trip* - Ideal for fishing enthusiasts\n\n"
-                    "Which one sounds most interesting to you?")
-                return True
-                
-            elif action.startswith('inquiry_people_') and len(parts) >= 3:
-                if action == 'inquiry_people_custom':
-                    tour_type = parts[2]
-                    ask_for_custom_people_count(phone_number, tour_type)
-                else:
-                    people_count = action.replace('inquiry_people_', '') + ' people'
-                    tour_type = parts[2]
-                    ask_for_inquiry_date(phone_number, tour_type, people_count)
-                return True
-                
-            elif action.startswith('inquiry_time_') and len(parts) >= 6:
-                time_map = {
-                    'inquiry_time_8am': '8:00 AM',
-                    'inquiry_time_9am': '9:00 AM',
-                    'inquiry_time_10am': '10:00 AM',
-                    'inquiry_time_2pm': '2:00 PM',
-                    'inquiry_time_4pm': '4:00 PM',
-                    'inquiry_time_6pm': '6:00 PM'
-                }
-                
-                booking_time = time_map.get(action, 'Not specified')
-                tour_type = parts[2]
-                people_count = parts[3]
-                booking_date = parts[4]
-                
-                ask_for_inquiry_questions(phone_number, tour_type, people_count, booking_date, booking_time)
-                return True
     
     # Regular menu interactions
     responses = {
@@ -1737,7 +941,7 @@ Muscat, Oman""",
         return False
 
 # ==============================
-# WEBHOOK ENDPOINTS
+# CORS FIX - SIMPLE AND CLEAN
 # ==============================
 
 @app.after_request
@@ -1746,6 +950,10 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
+
+# ==============================
+# WEBHOOK ENDPOINTS
+# ==============================
 
 @app.route("/webhook", methods=["GET"])
 def verify():
@@ -1777,16 +985,6 @@ def webhook():
             
         message = messages[0]
         phone_number = message["from"]
-        
-        # Check for admin commands first
-        if "text" in message:
-            text = message["text"]["body"].strip()
-            
-            # Handle admin commands
-            is_admin_command, admin_result = handle_admin_command(phone_number, text)
-            if is_admin_command:
-                send_whatsapp_message(phone_number, admin_result)
-                return jsonify({"status": "admin_command_handled"})
         
         # Check if it's an interactive message (list or button)
         if "interactive" in message:
@@ -1852,47 +1050,25 @@ def webhook():
                 ask_for_time(phone_number, name, contact, tour_type, people_count, text)
                 return jsonify({"status": "date_received"})
             
-            # Handle inquiry flow steps
-            elif session and session.get('flow') == 'inquiry':
-                if session.get('step') == 'awaiting_inquiry_tour':
-                    # User selected tour type in inquiry
-                    ask_for_inquiry_tour_type(phone_number)
-                    return jsonify({"status": "inquiry_tour_prompted"})
+            # Handle inquiry flow
+            elif session and session.get('step') == 'awaiting_inquiry':
+                # Save inquiry details
+                add_lead_to_sheet(
+                    name="Inquiry Customer",
+                    contact=phone_number,
+                    intent="Tour Inquiry Details",
+                    whatsapp_id=phone_number,
+                    tour_type="Custom Inquiry"
+                )
                 
-                elif session.get('step') == 'awaiting_inquiry_custom_people':
-                    # User provided custom people count
-                    tour_type = session['inquiry_data'].get('tour_type', '')
-                    session['inquiry_data']['people_count'] = text
-                    ask_for_inquiry_date(phone_number, tour_type, text)
-                    return jsonify({"status": "inquiry_custom_people_received"})
+                send_whatsapp_message(phone_number,
+                    "✅ *Inquiry Received!* 📝\n\n"
+                    "Thank you for your inquiry! Our team will contact you shortly with all the information you need. 📞\n\n"
+                    "Expected response time: 1-2 hours ⏰")
                 
-                elif session.get('step') == 'awaiting_inquiry_date':
-                    # User provided date in inquiry
-                    tour_type = session['inquiry_data'].get('tour_type', '')
-                    people_count = session['inquiry_data'].get('people_count', '')
-                    ask_for_inquiry_time(phone_number, tour_type, people_count, text)
-                    return jsonify({"status": "inquiry_date_received"})
-                
-                elif session.get('step') == 'awaiting_inquiry_questions':
-                    # User provided questions/comments
-                    tour_type = session['inquiry_data'].get('tour_type', '')
-                    people_count = session['inquiry_data'].get('people_count', '')
-                    booking_date = session['inquiry_data'].get('booking_date', '')
-                    booking_time = session['inquiry_data'].get('booking_time', '')
-                    
-                    # Complete inquiry with all details
-                    complete_inquiry(phone_number, "Inquiry Customer", phone_number, tour_type, people_count, booking_date, booking_time, text)
-                    return jsonify({"status": "inquiry_completed"})
-            
-            # Handle custom people count in booking flow
-            elif session and session.get('step') == 'awaiting_custom_people':
-                name = session.get('name', '')
-                contact = session.get('contact', '')
-                tour_type = session.get('tour_type', '')
-                
-                session['people_count'] = text
-                ask_for_date(phone_number, name, contact, tour_type, text)
-                return jsonify({"status": "custom_people_received"})
+                # Clear session
+                del booking_sessions[phone_number]
+                return jsonify({"status": "inquiry_received"})
             
             # If no specific match, send welcome message
             if not session:
@@ -2083,8 +1259,7 @@ def health():
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
         "active_sessions": len(booking_sessions),
-        "reminders_scheduled": len([s for s in booking_sessions.values() if s.get('reminder_scheduled')]),
-        "version": "6.0 - Ultimate Edition with Reminders & Admin Commands"
+        "version": "5.0 - Fixed Broadcast & CORS"
     }
     return jsonify(status)
 
@@ -2093,8 +1268,5 @@ def health():
 # ==============================
 
 if __name__ == "__main__":
-    # Start the reminder system
-    start_reminder_checker()
-    
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
