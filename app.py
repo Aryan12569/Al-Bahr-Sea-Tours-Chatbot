@@ -42,6 +42,19 @@ try:
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME).sheet1
+    
+    # Ensure the sheet has the right columns
+    try:
+        current_headers = sheet.row_values(1)
+        required_headers = ['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests']
+        if current_headers != required_headers:
+            sheet.clear()
+            sheet.append_row(required_headers)
+            logger.info("✅ Updated Google Sheets headers")
+    except:
+        # If sheet is empty, add headers
+        sheet.append_row(['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests'])
+    
     logger.info("✅ Google Sheets initialized successfully")
 except Exception as e:
     logger.error(f"❌ Google Sheets initialization failed: {str(e)}")
@@ -54,12 +67,12 @@ booking_sessions = {}
 # HELPER FUNCTIONS
 # ==============================
 
-def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", people_count="Not specified"):
+def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", adults_count="0", children_count="0", total_guests="0"):
     """Add user entry to Google Sheet"""
     try:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, people_count])
-        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}")
+        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, adults_count, children_count, total_guests])
+        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}, Adults: {adults_count}, Children: {children_count}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to add lead to sheet: {str(e)}")
@@ -139,29 +152,11 @@ def clean_oman_number(number):
     return None
 
 def send_welcome_message(to):
-    """Send initial welcome message"""
-    interactive_data = {
-        "type": "button",
-        "body": {
-            "text": "🌊 *Al Bahr Sea Tours* 🐬\n\nWelcome to Oman's premier sea adventure company! 🚤\n\nDiscover breathtaking marine life, crystal clear waters, and unforgettable experiences. 🌅\n\nReady to explore? 🗺️"
-        },
-        "action": {
-            "buttons": [
-                {
-                    "type": "reply",
-                    "reply": {
-                        "id": "view_options",
-                        "title": "🌊 View Tours"
-                    }
-                }
-            ]
-        }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
+    """Send initial welcome message with direct tour list"""
+    send_main_options_list(to)
 
 def send_main_options_list(to):
-    """Send ALL options in one list"""
+    """Send ALL options in one list - This is now the main menu"""
     interactive_data = {
         "type": "list",
         "header": {
@@ -169,7 +164,7 @@ def send_main_options_list(to):
             "text": "🌊 Al Bahr Sea Tours"
         },
         "body": {
-            "text": "Choose your sea adventure: 🗺️"
+            "text": "Welcome to Oman's premier sea adventure company! 🚤\n\nChoose your sea adventure: 🗺️"
         },
         "action": {
             "button": "🌊 View Tours",
@@ -324,83 +319,67 @@ def ask_for_tour_type(to, name, contact):
     
     send_whatsapp_message(to, "", interactive_data)
 
-def ask_for_people_count(to, name, contact, tour_type):
-    """Ask for number of people"""
+def ask_for_adults_count(to, name, contact, tour_type):
+    """Ask for number of adults"""
     # Update session with tour type
     if to in booking_sessions:
         booking_sessions[to].update({
-            'step': 'awaiting_people_count',
+            'step': 'awaiting_adults_count',
             'name': name,
             'contact': contact,
             'tour_type': tour_type
         })
     
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "👥 Number of People"
-        },
-        "body": {
-            "text": f"How many people for the {tour_type}?"
-        },
-        "action": {
-            "button": "Select Count",
-            "sections": [
-                {
-                    "title": "Group Size",
-                    "rows": [
-                        {
-                            "id": f"people_1|{name}|{contact}|{tour_type}",
-                            "title": "👤 1 Person",
-                            "description": "Individual booking"
-                        },
-                        {
-                            "id": f"people_2|{name}|{contact}|{tour_type}", 
-                            "title": "👥 2 People",
-                            "description": "Couple or friends"
-                        },
-                        {
-                            "id": f"people_3|{name}|{contact}|{tour_type}",
-                            "title": "👨‍👩‍👦 3 People", 
-                            "description": "Small group"
-                        },
-                        {
-                            "id": f"people_4|{name}|{contact}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 4 People",
-                            "description": "Family package"
-                        },
-                        {
-                            "id": f"people_5+|{name}|{contact}|{tour_type}",
-                            "title": "👨‍👩‍👧‍👦 5+ People",
-                            "description": "Large group (specify in chat)"
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
+    send_whatsapp_message(to,
+        f"👥 *Number of Adults*\n\n"
+        f"Great choice! {tour_type} it is! 🎯\n\n"
+        "How many *adults* (12 years and above) will be joining?\n\n"
+        "Please send the number:\n"
+        "*Examples:* 2, 4, 6")
 
-def ask_for_date(to, name, contact, tour_type, people_count):
-    """Ask for preferred date using WhatsApp calendar picker"""
-    # Update session with people count
+def ask_for_children_count(to, name, contact, tour_type, adults_count):
+    """Ask for number of children"""
+    # Update session with adults count
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_children_count',
+            'name': name,
+            'contact': contact,
+            'tour_type': tour_type,
+            'adults_count': adults_count
+        })
+    
+    send_whatsapp_message(to,
+        f"👶 *Number of Children*\n\n"
+        f"Adults: {adults_count}\n\n"
+        "How many *children* (below 12 years) will be joining?\n\n"
+        "Please send the number:\n"
+        "*Examples:* 0, 1, 2\n\n"
+        "If no children, just send: 0")
+
+def ask_for_date(to, name, contact, tour_type, adults_count, children_count):
+    """Ask for preferred date"""
+    # Calculate total guests
+    total_guests = int(adults_count) + int(children_count)
+    
+    # Update session with people counts
     if to in booking_sessions:
         booking_sessions[to].update({
             'step': 'awaiting_date',
             'name': name,
             'contact': contact,
             'tour_type': tour_type,
-            'people_count': people_count
+            'adults_count': adults_count,
+            'children_count': children_count,
+            'total_guests': total_guests
         })
     
-    # For WhatsApp, we use text prompt since interactive calendar requires templates
-    # But we can make it more user-friendly
     send_whatsapp_message(to,
         f"📅 *Preferred Date*\n\n"
-        f"Great choice! {people_count} for {tour_type}. 🎯\n\n"
-        "Please send your *preferred date* in this format:\n\n"
+        f"Perfect! {total_guests} guests total:\n"
+        f"• {adults_count} adults\n"
+        f"• {children_count} children\n\n"
+        "Please send your *preferred date*:\n\n"
         "📋 *Format Examples:*\n"
         "• **Tomorrow**\n"
         "• **October 29**\n" 
@@ -409,8 +388,10 @@ def ask_for_date(to, name, contact, tour_type, people_count):
         "• **2024-12-25**\n\n"
         "We'll check availability for your chosen date! 📅")
 
-def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
+def ask_for_time(to, name, contact, tour_type, adults_count, children_count, booking_date):
     """Ask for preferred time"""
+    total_guests = int(adults_count) + int(children_count)
+    
     # Update session with date
     if to in booking_sessions:
         booking_sessions[to].update({
@@ -418,7 +399,9 @@ def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
             'name': name,
             'contact': contact,
             'tour_type': tour_type,
-            'people_count': people_count,
+            'adults_count': adults_count,
+            'children_count': children_count,
+            'total_guests': total_guests,
             'booking_date': booking_date
         })
     
@@ -429,7 +412,7 @@ def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
             "text": "🕒 Preferred Time"
         },
         "body": {
-            "text": f"Perfect! {booking_date} for {tour_type}.\n\nChoose your preferred time:"
+            "text": f"Perfect! {booking_date} for {tour_type}.\n\n{total_guests} guests:\n• {adults_count} adults\n• {children_count} children\n\nChoose your preferred time:"
         },
         "action": {
             "button": "Select Time",
@@ -438,17 +421,17 @@ def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
                     "title": "Morning Sessions",
                     "rows": [
                         {
-                            "id": f"time_8am|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "id": f"time_8am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
                             "title": "🌅 8:00 AM",
                             "description": "Early morning adventure"
                         },
                         {
-                            "id": f"time_9am|{name}|{contact}|{tour_type}|{people_count}|{booking_date}", 
+                            "id": f"time_9am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
                             "title": "☀️ 9:00 AM",
                             "description": "Morning session"
                         },
                         {
-                            "id": f"time_10am|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "id": f"time_10am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
                             "title": "🌞 10:00 AM", 
                             "description": "Late morning"
                         }
@@ -458,17 +441,17 @@ def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
                     "title": "Afternoon Sessions",
                     "rows": [
                         {
-                            "id": f"time_2pm|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "id": f"time_2pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
                             "title": "🌇 2:00 PM",
                             "description": "Afternoon adventure"
                         },
                         {
-                            "id": f"time_4pm|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "id": f"time_4pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
                             "title": "🌅 4:00 PM",
                             "description": "Late afternoon"
                         },
                         {
-                            "id": f"time_6pm|{name}|{contact}|{tour_type}|{people_count}|{booking_date}",
+                            "id": f"time_6pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
                             "title": "🌆 6:00 PM",
                             "description": "Evening session"
                         }
@@ -480,8 +463,10 @@ def ask_for_time(to, name, contact, tour_type, people_count, booking_date):
     
     send_whatsapp_message(to, "", interactive_data)
 
-def complete_booking(to, name, contact, tour_type, people_count, booking_date, booking_time):
+def complete_booking(to, name, contact, tour_type, adults_count, children_count, booking_date, booking_time):
     """Complete the booking and save to sheet"""
+    total_guests = int(adults_count) + int(children_count)
+    
     # Save to Google Sheets
     success = add_lead_to_sheet(
         name=name,
@@ -491,7 +476,9 @@ def complete_booking(to, name, contact, tour_type, people_count, booking_date, b
         tour_type=tour_type,
         booking_date=booking_date,
         booking_time=booking_time,
-        people_count=people_count
+        adults_count=adults_count,
+        children_count=children_count,
+        total_guests=str(total_guests)
     )
     
     # Clear the session
@@ -507,10 +494,12 @@ def complete_booking(to, name, contact, tour_type, people_count, booking_date, b
             f"👤 Name: {name}\n"
             f"📞 Contact: {contact}\n"
             f"🚤 Tour: {tour_type}\n"
-            f"👥 People: {people_count}\n"
+            f"👥 Guests: {total_guests} total\n"
+            f"   • {adults_count} adults\n"
+            f"   • {children_count} children\n"
             f"📅 Date: {booking_date}\n"
             f"🕒 Time: {booking_time}\n\n"
-            f"💰 *Total: {calculate_price(tour_type, people_count)} OMR*\n\n"
+            f"💰 *Total: {calculate_price(tour_type, adults_count, children_count)} OMR*\n\n"
             f"Our team will contact you within 1 hour to confirm details. ⏰\n"
             f"For immediate assistance: +968 24 123456 📞\n\n"
             f"Get ready for an amazing sea adventure! 🌊")
@@ -522,12 +511,14 @@ def complete_booking(to, name, contact, tour_type, people_count, booking_date, b
             f"👤 Name: {name}\n"
             f"📞 Contact: {contact}\n"
             f"🚤 Tour: {tour_type}\n"
-            f"👥 People: {people_count}\n"
+            f"👥 Guests: {total_guests} total\n"
+            f"   • {adults_count} adults\n"
+            f"   • {children_count} children\n"
             f"📅 Date: {booking_date}\n"
             f"🕒 Time: {booking_time}\n\n"
             f"Our team will contact you within 1 hour to confirm. 📞")
 
-def calculate_price(tour_type, people_count):
+def calculate_price(tour_type, adults_count, children_count):
     """Calculate tour price based on type and people count"""
     prices = {
         "Dolphin Watching": 25,
@@ -537,13 +528,20 @@ def calculate_price(tour_type, people_count):
     }
     
     base_price = prices.get(tour_type, 30)
-    people = int(people_count.replace('+', '').replace(' people', '')) if people_count.replace('+', '').replace(' people', '').isdigit() else 1
+    adults = int(adults_count)
+    children = int(children_count)
     
-    # Apply group discount for 4+ people
-    if people >= 4:
-        return base_price * people * 0.9  # 10% discount
+    # Children under 12 get 50% discount
+    adult_total = adults * base_price
+    children_total = children * (base_price * 0.5)  # 50% discount for children
     
-    return base_price * people
+    total_price = adult_total + children_total
+    
+    # Apply group discount for 4+ total guests
+    if (adults + children) >= 4:
+        total_price = total_price * 0.9  # 10% discount
+    
+    return f"{total_price:.2f}"
 
 def handle_keyword_questions(text, phone_number):
     """Handle direct keyword questions without menu"""
@@ -572,22 +570,28 @@ We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
         response = """💰 *Tour Prices & Packages:* 💵
 
 🐬 *Dolphin Watching Tour:*
-• 2 hours • 25 OMR per person
+• 2 hours • 25 OMR per adult
+• Children under 12: 50% discount
 • Includes: Guide, safety equipment, refreshments
 
 🤿 *Snorkeling Adventure:*
-• 3 hours • 35 OMR per person  
+• 3 hours • 35 OMR per adult
+• Children under 12: 50% discount  
 • Includes: Equipment, guide, snacks & drinks
 
 ⛵ *Sunset Dhow Cruise:*
-• 2 hours • 40 OMR per person
+• 2 hours • 40 OMR per adult
+• Children under 12: 50% discount
 • Includes: Traditional Omani dinner, drinks
 
 🎣 *Fishing Trip:*
-• 4 hours • 50 OMR per person
+• 4 hours • 50 OMR per adult
+• Children under 12: 50% discount
 • Includes: Fishing gear, bait, refreshments
 
-👨‍👩‍👧‍👦 *Family & Group Discounts Available!*"""
+👨‍👩‍👧‍👦 *Special Offers:*
+• Group of 4+ people: 10% discount
+• Family packages available!"""
         send_whatsapp_message(phone_number, response)
         return True
     
@@ -650,20 +654,10 @@ def handle_interaction(interaction_id, phone_number):
             name = parts[1]
             contact = parts[2]
             
-            ask_for_people_count(phone_number, name, contact, tour_type)
+            ask_for_adults_count(phone_number, name, contact, tour_type)
             return True
             
-        elif action.startswith('people_') and len(parts) >= 4:
-            # People count selection
-            people_count = action.replace('people_', '') + ' people'
-            name = parts[1]
-            contact = parts[2]
-            tour_type = parts[3]
-            
-            ask_for_date(phone_number, name, contact, tour_type, people_count)
-            return True
-            
-        elif action.startswith('time_') and len(parts) >= 6:
+        elif action.startswith('time_') and len(parts) >= 7:
             # Time selection - complete booking
             time_map = {
                 'time_8am': '8:00 AM',
@@ -678,15 +672,16 @@ def handle_interaction(interaction_id, phone_number):
             name = parts[1]
             contact = parts[2]
             tour_type = parts[3]
-            people_count = parts[4]
-            booking_date = parts[5]
+            adults_count = parts[4]
+            children_count = parts[5]
+            booking_date = parts[6]
             
-            complete_booking(phone_number, name, contact, tour_type, people_count, booking_date, booking_time)
+            complete_booking(phone_number, name, contact, tour_type, adults_count, children_count, booking_date, booking_time)
             return True
     
     # Regular menu interactions
     responses = {
-        # Welcome button
+        # Welcome button - now directly sends main list
         "view_options": lambda: send_main_options_list(phone_number),
         
         # Tour options
@@ -695,7 +690,7 @@ def handle_interaction(interaction_id, phone_number):
 *Experience the magic of swimming with wild dolphins!* 
 
 📅 *Duration:* 2 hours
-💰 *Price:* 25 OMR per person
+💰 *Price:* 25 OMR per adult (50% off for children)
 👥 *Group size:* Small groups (max 8 people)
 
 *What's included:*
@@ -714,7 +709,7 @@ Ready to book? Select 'Book Now'! 📅""",
 *Discover Oman's underwater paradise!* 
 
 📅 *Duration:* 3 hours
-💰 *Price:* 35 OMR per person
+💰 *Price:* 35 OMR per adult (50% off for children)
 👥 *Group size:* Small groups (max 6 people)
 
 *What's included:*
@@ -736,7 +731,7 @@ Ready to explore? Select 'Book Now'! 🌊""",
 *Sail into the sunset on a traditional Omani boat!*
 
 📅 *Duration:* 2 hours
-💰 *Price:* 40 OMR per person
+💰 *Price:* 40 OMR per adult (50% off for children)
 👥 *Group size:* Intimate groups (max 10 people)
 
 *What's included:*
@@ -755,7 +750,7 @@ Ready to sail? Select 'Book Now'! ⛵""",
 *Experience the thrill of deep sea fishing!*
 
 📅 *Duration:* 4 hours
-💰 *Price:* 50 OMR per person
+💰 *Price:* 50 OMR per adult (50% off for children)
 👥 *Group size:* Small groups (max 4 people)
 
 *What's included:*
@@ -774,23 +769,23 @@ Ready to catch the big one? Select 'Book Now'! 🎣""",
         "pricing": """💰 *Tour Prices & Packages* 💵
 
 *All prices include safety equipment & guides*
+*Children under 12 get 50% discount!*
 
-🐬 *Dolphin Watching:* 25 OMR
+🐬 *Dolphin Watching:* 25 OMR per adult
 • 2 hours • Small groups • Refreshments included
 
-🤿 *Snorkeling Adventure:* 35 OMR  
+🤿 *Snorkeling Adventure:* 35 OMR per adult  
 • 3 hours • Full equipment • Snacks & drinks
 
-⛵ *Dhow Cruise:* 40 OMR
+⛵ *Dhow Cruise:* 40 OMR per adult
 • 2 hours • Traditional boat • Dinner included
 
-🎣 *Fishing Trip:* 50 OMR
+🎣 *Fishing Trip:* 50 OMR per adult
 • 4 hours • Professional gear • Refreshments
 
 👨‍👩‍👧‍👦 *Special Offers:*
-• Family Package (4 people): 10% discount
-• Group Booking (6+ people): 15% discount
-• Children under 12: 50% discount
+• Group of 4+ people: 10% discount
+• Family packages available
 
 Book your adventure today! 📅""",
 
@@ -969,14 +964,42 @@ def webhook():
                 ask_for_tour_type(phone_number, name, text)
                 return jsonify({"status": "contact_received"})
             
+            # Handle booking flow - adults count input
+            elif session and session.get('step') == 'awaiting_adults_count':
+                # Validate numeric input
+                if text.isdigit() and int(text) > 0:
+                    name = session.get('name', '')
+                    contact = session.get('contact', '')
+                    tour_type = session.get('tour_type', '')
+                    ask_for_children_count(phone_number, name, contact, tour_type, text)
+                    return jsonify({"status": "adults_count_received"})
+                else:
+                    send_whatsapp_message(phone_number, "Please enter a valid number of adults (e.g., 2, 4, 6)")
+                    return jsonify({"status": "invalid_adults_count"})
+            
+            # Handle booking flow - children count input
+            elif session and session.get('step') == 'awaiting_children_count':
+                # Validate numeric input
+                if text.isdigit() and int(text) >= 0:
+                    name = session.get('name', '')
+                    contact = session.get('contact', '')
+                    tour_type = session.get('tour_type', '')
+                    adults_count = session.get('adults_count', '')
+                    ask_for_date(phone_number, name, contact, tour_type, adults_count, text)
+                    return jsonify({"status": "children_count_received"})
+                else:
+                    send_whatsapp_message(phone_number, "Please enter a valid number of children (e.g., 0, 1, 2)")
+                    return jsonify({"status": "invalid_children_count"})
+            
             # Handle booking flow - date input
             elif session and session.get('step') == 'awaiting_date':
                 name = session.get('name', '')
                 contact = session.get('contact', '')
                 tour_type = session.get('tour_type', '')
-                people_count = session.get('people_count', '')
+                adults_count = session.get('adults_count', '')
+                children_count = session.get('children_count', '')
                 
-                ask_for_time(phone_number, name, contact, tour_type, people_count, text)
+                ask_for_time(phone_number, name, contact, tour_type, adults_count, children_count, text)
                 return jsonify({"status": "date_received"})
             
             # If no specific match, send welcome message
@@ -1162,7 +1185,7 @@ def health():
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
         "active_sessions": len(booking_sessions),
-        "version": "5.0 - Fixed Broadcast & CORS"
+        "version": "6.0 - Adults/Children Count & Direct Menu"
     }
     return jsonify(status)
 
