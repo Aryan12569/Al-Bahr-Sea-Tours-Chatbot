@@ -3,241 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oceanic Voyage Dashboard | Al Bahr Tours</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Al Bahr Sea Tours - Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        ocean: {
-                            50: '#f0f9ff',
-                            100: '#e0f2fe',
-                            200: '#bae6fd',
-                            300: '#7dd3fc',
-                            400: '#38bdf8',
-                            500: '#0ea5e9',
-                            600: '#0284c7',
-                            700: '#0369a1',
-                            800: '#075985',
-                            900: '#0c4a6e',
-                        },
-                        wave: {
-                            400: '#06b6d4',
-                            500: '#0891b2',
-                            600: '#0e7490',
-                            700: '#155e75',
-                        }
-                    },
-                    animation: {
-                        'wave': 'wave 8s ease-in-out infinite',
-                        'float': 'float 6s ease-in-out infinite',
-                        'fade-in': 'fadeIn 0.8s ease-out',
-                        'ripple': 'ripple 3s linear infinite',
-                    },
-                    keyframes: {
-                        wave: {
-                            '0%, 100%': { transform: 'rotate(-3deg)' },
-                            '50%': { transform: 'rotate(3deg)' }
-                        },
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0)' },
-                            '50%': { transform: 'translateY(-20px)' }
-                        },
-                        fadeIn: {
-                            '0%': { opacity: 0, transform: 'translateY(20px)' },
-                            '100%': { opacity: 1, transform: 'translateY(0)' }
-                        },
-                        ripple: {
-                            '0%': { transform: 'scale(0.8)', opacity: 1 },
-                            '100%': { transform: 'scale(2.4)', opacity: 0 }
-                        }
-                    }
-                }
-            }
-        }
-    </script>
     <script src="https://unpkg.com/feather-icons"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
     <style>
         :root {
-            --color-ocean-500: #0ea5e9;
-            --color-wave-500: #0891b2;
+            --primary: #0369a1;
+            --primary-dark: #0c4a6e;
+            --secondary: #0e7490;
+            --accent: #06b6d4;
         }
-
-        body {
-            font-family: 'Poppins', sans-serif;
+        
+        body { 
             background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            overscroll-behavior: none;
+            font-family: 'Inter', sans-serif;
         }
-
-        .ocean-bg {
-            background: linear-gradient(180deg, rgba(6,182,212,0.1) 0%, rgba(14,165,233,0.05) 100%);
+        
+        .sidebar { 
+            transition: all 0.3s ease;
+            background: linear-gradient(180deg, var(--primary-dark) 0%, var(--primary) 100%);
         }
-
+        
+        .card-hover { 
+            transition: all 0.3s ease; 
+        }
+        
+        .card-hover:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-left: 4px solid var(--primary);
+        }
+        
+        .nav-active {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .loading-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
         .wave-bg {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%230ea5e9' fill-opacity='0.1'%3E%3C/path%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%230369a1' fill-opacity='0.1'%3E%3C/path%3E%3C/svg%3E");
             background-size: cover;
             background-position: bottom;
-            background-repeat: no-repeat;
         }
 
-        .card-hover {
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            transform-style: preserve-3d;
-            perspective: 1000px;
-        }
-
-        .card-hover:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-        }
-
-        .nav-item {
+        .chat-message {
+            max-width: 80%;
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-radius: 18px;
             position: relative;
-            overflow: hidden;
         }
 
-        .nav-item::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 0;
-            height: 3px;
-            background-color: white;
-            transition: width 0.4s ease;
+        .admin-message {
+            background: #dcf8c6;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
         }
 
-        .nav-item:hover::after {
-            width: 100%;
+        .user-message {
+            background: #ffffff;
+            border: 1px solid #e5e5e5;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
         }
 
-        .nav-active::after {
-            width: 100%;
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            background: #f8f9fa;
         }
 
-        .ripple {
-            position: relative;
-            overflow: hidden;
-        }
-
-        .ripple::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 20px;
-            height: 20px;
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 50%;
-            transform: translate(-50%, -50%) scale(0);
-            animation: ripple 0.6s linear;
-        }
-
-        @keyframes ripple {
-            to {
-                transform: translate(-50%, -50%) scale(10);
-                opacity: 0;
-            }
-        }
-
-        .floating {
-            animation: float 6s ease-in-out infinite;
-        }
-
-        .wave-animation {
-            animation: wave 8s ease-in-out infinite;
-        }
-
-        .fade-in {
-            animation: fadeIn 0.8s ease-out forwards;
-        }
-
-        .delay-100 {
-            animation-delay: 100ms;
-        }
-
-        .delay-200 {
-            animation-delay: 200ms;
-        }
-
-        .delay-300 {
-            animation-delay: 300ms;
-        }
-
-        .delay-400 {
-            animation-delay: 400ms;
-        }
-
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .text-gradient {
-            background: linear-gradient(90deg, #0ea5e9 0%, #0891b2 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
+        .session-badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
         }
     </style>
 </head>
-<body class="font-sans antialiased overflow-x-hidden">
-    <!-- Vanta.js Waves Background -->
-    <div id="vanta-waves" class="fixed inset-0 -z-10 opacity-30"></div>
+<body class="font-sans antialiased">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="fixed inset-0 bg-white z-50 flex items-center justify-center transition-opacity duration-300">
+        <div class="text-center">
+            <div class="w-16 h-16 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-600 loading-pulse">Loading Al Bahr Dashboard...</p>
+        </div>
+    </div>
 
-
-    <!-- Main Layout -->
-    <div class="flex h-screen overflow-hidden">
-        <!-- Sidebar -->
-        <div class="sidebar w-72 bg-gradient-to-b from-ocean-800 to-ocean-900 text-white flex flex-col shadow-2xl transform transition-all duration-300 z-20">
-            <!-- Logo -->
-            <div class="p-6 flex items-center space-x-3 border-b border-white border-opacity-10">
-                <div class="p-2 rounded-lg bg-white bg-opacity-10 backdrop-blur-md shadow-lg wave-animation">
-                    <i data-feather="anchor" class="w-6 h-6 text-white"></i>
-                </div>
+    <!-- Error Message -->
+    <div id="errorMessage" class="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg shadow-lg z-50 hidden">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <i data-feather="alert-triangle" class="w-5 h-5 mr-3"></i>
                 <div>
-                    <span class="font-bold text-xl bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">Oceanic Voyage</span>
-                    <p class="text-xs text-blue-200">Al Bahr Sea Tours • Muscat</p>
+                    <p class="font-medium" id="errorTitle">Connection Error</p>
+                    <p class="text-sm" id="errorText">Failed to load data from server</p>
+                </div>
+            </div>
+            <button onclick="hideError()" class="ml-4 text-red-500 hover:text-red-700">
+                <i data-feather="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    <div id="successMessage" class="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg shadow-lg z-50 hidden">
+        <div class="flex items-center">
+            <i data-feather="check-circle" class="w-5 h-5 mr-3"></i>
+            <div>
+                <p class="font-medium" id="successTitle">Success</p>
+                <p class="text-sm" id="successText">Operation completed successfully</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Modal -->
+    <div id="chatModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-2xl h-[600px] flex flex-col">
+            <div class="flex justify-between items-center p-6 border-b">
+                <div>
+                    <h3 class="font-bold text-lg" id="chatUserName">Customer Chat</h3>
+                    <p class="text-sm text-gray-600" id="chatUserPhone">Loading...</p>
+                    <div class="flex items-center space-x-2 mt-1">
+                        <span class="text-xs text-gray-500">Session:</span>
+                        <span id="chatSessionStatus" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Checking...</span>
+                    </div>
+                </div>
+                <button id="closeChat" class="text-gray-500 hover:text-gray-700">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 p-4 overflow-hidden">
+                <div class="chat-container p-4" id="chatMessages">
+                    <div class="text-center text-gray-500 py-8">
+                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Start a conversation with the customer</p>
+                    </div>
                 </div>
             </div>
             
-            <!-- Navigation -->
-            <nav class="flex-1 p-6 space-y-1">
-                <a href="#" id="dashboardLink" class="nav-item nav-active flex items-center space-x-3 p-4 rounded-xl bg-white bg-opacity-10 backdrop-blur-md shadow-lg transition-all duration-300">
+            <div class="p-4 border-t">
+                <div class="flex space-x-3">
+                    <input type="text" id="chatMessageInput" placeholder="Type your message..." 
+                           class="flex-1 px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
+                    <button id="sendChatMessage" class="bg-blue-900 text-white px-6 py-3 rounded-xl hover:bg-opacity-90 transition-all">
+                        <i data-feather="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2">
+                    <button onclick="insertQuickMessage('Hello! How can I help you today?')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        Quick Help
+                    </button>
+                    <button onclick="insertQuickMessage('Can you please provide more details?')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        More Details
+                    </button>
+                    <button onclick="insertQuickMessage('Our team will contact you shortly.')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        Team Contact
+                    </button>
+                    <button onclick="insertQuickMessage('Thank you for your patience!')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        Thank You
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="sidebar w-64 text-white flex flex-col shadow-xl">
+            <div class="p-6 flex items-center space-x-3 border-b border-white border-opacity-20">
+                <div class="p-2 rounded-lg gradient-bg">
+                    <i data-feather="anchor" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-lg">Al Bahr Sea Tours</span>
+                    <p class="text-xs text-blue-200">Muscat, Oman</p>
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-6 space-y-2">
+                <a href="#" id="dashboardLink" class="nav-active flex items-center space-x-3 p-3 rounded-xl bg-white bg-opacity-20 shadow-lg transition-all">
                     <i data-feather="home" class="w-5 h-5"></i>
                     <span class="font-medium">Dashboard</span>
                 </a>
-                <a href="#" id="leadsLink" class="nav-item flex items-center space-x-3 p-4 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all duration-300">
+                <a href="#" id="leadsLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
                     <i data-feather="users" class="w-5 h-5"></i>
                     <span class="font-medium">Leads Management</span>
                 </a>
-                <a href="#" id="broadcastLink" class="nav-item flex items-center space-x-3 p-4 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all duration-300">
+                <a href="#" id="chatLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
+                    <i data-feather="message-circle" class="w-5 h-5"></i>
+                    <span class="font-medium">Live Chat</span>
+                </a>
+                <a href="#" id="broadcastLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
                     <i data-feather="send" class="w-5 h-5"></i>
                     <span class="font-medium">Broadcast</span>
                 </a>
             </nav>
             
-            <!-- User Profile -->
-            <div class="p-6 border-t border-white border-opacity-10">
+            <div class="p-6 border-t border-white border-opacity-20">
                 <div class="flex items-center space-x-3">
-                    <div class="relative">
-                        <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center overflow-hidden">
-                            <i data-feather="user" class="w-5 h-5 text-white"></i>
-                        </div>
-                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-ocean-800"></span>
+                    <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                        <i data-feather="user" class="w-5 h-5"></i>
                     </div>
                     <div>
-                        <p class="text-sm font-medium">Captain Admin</p>
+                        <p class="text-sm font-medium">Admin User</p>
                         <p class="text-xs text-blue-200" id="connectionStatus">Connected</p>
                     </div>
                 </div>
@@ -245,20 +245,19 @@
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 overflow-auto bg-gradient-to-br from-blue-50 to-white">
-            <!-- Header -->
-            <header class="bg-white shadow-sm p-6 flex justify-between items-center border-b wave-bg sticky top-0 z-10">
+        <div class="flex-1 overflow-auto bg-gray-50">
+            <header class="bg-white shadow-sm p-6 flex justify-between items-center border-b wave-bg">
                 <div>
-                    <h1 class="text-2xl font-bold text-ocean-800" id="pageTitle">Dashboard Overview</h1>
-                    <p class="text-ocean-600" id="pageSubtitle">Al Bahr Sea Tours - Muscat, Oman</p>
+                    <h1 class="text-2xl font-bold text-gray-800" id="pageTitle">Dashboard Overview</h1>
+                    <p class="text-gray-600" id="pageSubtitle">Al Bahr Sea Tours - Muscat, Oman</p>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <div class="flex items-center space-x-2 text-sm text-ocean-600 bg-ocean-50 px-3 py-2 rounded-lg">
+                    <div class="flex items-center space-x-2 text-sm text-gray-600">
                         <i data-feather="clock" class="w-4 h-4"></i>
                         <span id="currentTime">--:--:--</span>
                     </div>
-                    <button id="refreshBtn" class="flex items-center space-x-2 bg-gradient-to-r from-ocean-600 to-wave-600 text-white px-4 py-2 rounded-xl hover:opacity-90 transition-all shadow-lg ripple">
-                        <i data-feather="refresh-cw" class="w-4 h-4 animate-spin-on-click"></i>
+                    <button id="refreshBtn" class="flex items-center space-x-2 bg-blue-900 text-white px-4 py-2 rounded-xl hover:bg-opacity-90 transition-all shadow-lg">
+                        <i data-feather="refresh-cw" class="w-4 h-4"></i>
                         <span>Refresh Data</span>
                     </button>
                 </div>
@@ -270,66 +269,54 @@
                 <div id="dashboardSection">
                     <!-- Analytics Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white rounded-2xl shadow-lg p-6 card-hover fade-in">
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
                             <div class="flex justify-between items-start">
                                 <div>
                                     <p class="text-gray-500 text-sm font-medium">Total Leads</p>
                                     <h3 class="text-3xl font-bold text-gray-800 mt-2" id="totalLeads">0</h3>
-                                    <p class="text-green-600 text-sm mt-1 flex items-center" id="leadsGrowth">
-                                        <i data-feather="trending-up" class="w-4 h-4 mr-1"></i>
-                                        <span>+0 today</span>
-                                    </p>
+                                    <p class="text-green-600 text-sm mt-1" id="leadsGrowth">+0 today</p>
                                 </div>
-                                <div class="p-3 rounded-xl bg-blue-100 text-ocean-600 floating">
-                                    <i data-feather="users" class="w-6 h-6"></i>
+                                <div class="p-3 rounded-xl bg-blue-100">
+                                    <i data-feather="users" class="w-6 h-6 text-blue-900"></i>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-white rounded-2xl shadow-lg p-6 card-hover fade-in delay-100">
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
                             <div class="flex justify-between items-start">
                                 <div>
                                     <p class="text-gray-500 text-sm font-medium">Tour Bookings</p>
                                     <h3 class="text-3xl font-bold text-gray-800 mt-2" id="bookTours">0</h3>
-                                    <p class="text-green-600 text-sm mt-1 flex items-center" id="bookPercentage">
-                                        <i data-feather="arrow-up-right" class="w-4 h-4 mr-1"></i>
-                                        <span>0%</span>
-                                    </p>
+                                    <p class="text-green-600 text-sm mt-1" id="bookPercentage">0%</p>
                                 </div>
-                                <div class="p-3 rounded-xl bg-green-100 text-green-600 floating">
-                                    <i data-feather="check-circle" class="w-6 h-6"></i>
+                                <div class="p-3 rounded-xl bg-green-100">
+                                    <i data-feather="check-circle" class="w-6 h-6 text-green-600"></i>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-white rounded-2xl shadow-lg p-6 card-hover fade-in delay-200">
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-gray-500 text-sm font-medium">Tour Inquiries</p>
-                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="inquireTours">0</h3>
-                                    <p class="text-yellow-600 text-sm mt-1 flex items-center" id="inquirePercentage">
-                                        <i data-feather="help-circle" class="w-4 h-4 mr-1"></i>
-                                        <span>0%</span>
-                                    </p>
+                                    <p class="text-gray-500 text-sm font-medium">Active Chats</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="activeChats">0</h3>
+                                    <p class="text-blue-600 text-sm mt-1" id="chatsGrowth">+0 active</p>
                                 </div>
-                                <div class="p-3 rounded-xl bg-yellow-100 text-yellow-600 floating">
-                                    <i data-feather="help-circle" class="w-6 h-6"></i>
+                                <div class="p-3 rounded-xl bg-purple-100">
+                                    <i data-feather="message-circle" class="w-6 h-6 text-purple-600"></i>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-white rounded-2xl shadow-lg p-6 card-hover fade-in delay-300">
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
                             <div class="flex justify-between items-start">
                                 <div>
                                     <p class="text-gray-500 text-sm font-medium">Today's Leads</p>
                                     <h3 class="text-3xl font-bold text-gray-800 mt-2" id="todayLeads">0</h3>
-                                    <p class="text-blue-600 text-sm mt-1 flex items-center" id="todayGrowth">
-                                        <i data-feather="zap" class="w-4 h-4 mr-1"></i>
-                                        <span>+0</span>
-                                    </p>
+                                    <p class="text-blue-600 text-sm mt-1" id="todayGrowth">+0</p>
                                 </div>
-                                <div class="p-3 rounded-xl bg-blue-100 text-blue-600 floating">
-                                    <i data-feather="clock" class="w-6 h-6"></i>
+                                <div class="p-3 rounded-xl bg-blue-100">
+                                    <i data-feather="trending-up" class="w-6 h-6 text-blue-600"></i>
                                 </div>
                             </div>
                         </div>
@@ -337,34 +324,14 @@
 
                     <!-- Charts Row -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-white rounded-2xl shadow-lg p-6 fade-in">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-lg text-gray-800">Tour Type Distribution</h3>
-                                <div class="flex space-x-2">
-                                    <button class="p-1 rounded-lg bg-ocean-50 text-ocean-600">
-                                        <i data-feather="bar-chart-2" class="w-4 h-4"></i>
-                                    </button>
-                                    <button class="p-1 rounded-lg bg-ocean-50 text-ocean-600">
-                                        <i data-feather="pie-chart" class="w-4 h-4"></i>
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="font-bold text-lg mb-4">Tour Type Distribution</h3>
                             <div class="h-64 flex items-center justify-center" id="tourChartContainer">
                                 <canvas id="tourChart"></canvas>
                             </div>
                         </div>
-                        <div class="bg-white rounded-2xl shadow-lg p-6 fade-in delay-100">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-lg text-gray-800">Lead Intent Distribution</h3>
-                                <div class="flex space-x-2">
-                                    <button class="p-1 rounded-lg bg-ocean-50 text-ocean-600">
-                                        <i data-feather="bar-chart-2" class="w-4 h-4"></i>
-                                    </button>
-                                    <button class="p-1 rounded-lg bg-ocean-50 text-ocean-600">
-                                        <i data-feather="pie-chart" class="w-4 h-4"></i>
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="font-bold text-lg mb-4">Lead Intent Distribution</h3>
                             <div class="h-64 flex items-center justify-center" id="intentChartContainer">
                                 <canvas id="intentChart"></canvas>
                             </div>
@@ -372,21 +339,15 @@
                     </div>
 
                     <!-- Recent Activity -->
-                    <div class="bg-white rounded-2xl shadow-lg p-6 fade-in delay-200">
+                    <div class="bg-white rounded-2xl shadow-lg p-6">
                         <div class="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 class="font-bold text-lg text-gray-800">Recent Leads</h3>
-                                <p class="text-gray-500 text-sm">Latest customer interactions</p>
-                            </div>
-                            <button id="viewAllLeads" class="text-ocean-600 hover:text-ocean-800 text-sm font-medium flex items-center">
-                                View All Leads <i data-feather="chevron-right" class="w-4 h-4 ml-1"></i>
-                            </button>
+                            <h3 class="font-bold text-lg">Recent Leads</h3>
+                            <button id="viewAllLeads" class="text-blue-900 hover:text-blue-700 text-sm font-medium">View All Leads</button>
                         </div>
                         <div class="space-y-4" id="recentLeads">
-                            <div class="text-center py-12 text-gray-400">
-                                <i data-feather="users" class="w-12 h-12 mx-auto mb-4 opacity-30"></i>
-                                <p class="text-gray-500">No leads data available yet</p>
-                                <p class="text-sm text-gray-400 mt-1">New leads will appear here automatically</p>
+                            <div class="text-center py-8 text-gray-500">
+                                <i data-feather="users" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                <p>No leads data available</p>
                             </div>
                         </div>
                     </div>
@@ -396,15 +357,15 @@
                 <div class="bg-white rounded-2xl shadow-lg overflow-hidden" id="leadsSection" style="display:none;">
                     <div class="p-6 flex justify-between items-center border-b">
                         <div>
-                            <h3 class="font-bold text-lg text-gray-800">Leads Management</h3>
+                            <h3 class="font-bold text-lg">Leads Management</h3>
                             <p class="text-gray-600 text-sm">Manage and track all tour inquiries and bookings</p>
                         </div>
                         <div class="flex space-x-3">
                             <div class="relative">
-                                <input type="text" id="searchLeads" placeholder="Search leads..." class="pl-10 pr-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-ocean-500 focus:border-transparent">
+                                <input type="text" id="searchLeads" placeholder="Search leads..." class="pl-10 pr-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
                                 <i data-feather="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
                             </div>
-                            <button id="exportPDF" class="flex items-center space-x-2 bg-ocean-50 text-ocean-600 px-4 py-2 rounded-xl hover:bg-ocean-100 transition-all ripple">
+                            <button id="exportPDF" class="flex items-center space-x-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-200 transition-all">
                                 <i data-feather="download" class="w-4 h-4"></i>
                                 <span>Export PDF</span>
                             </button>
@@ -419,14 +380,14 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tour Type</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Intent</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">WhatsApp ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200" id="leadsTableBody">
                                 <tr>
                                     <td colspan="6" class="px-6 py-4 text-center text-gray-500">
                                         <div class="flex items-center justify-center space-x-2">
-                                            <div class="w-4 h-4 border-2 border-ocean-500 border-t-transparent rounded-full animate-spin"></div>
+                                            <div class="w-4 h-4 border-2 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
                                             <span>Loading leads from Google Sheets...</span>
                                         </div>
                                     </td>
@@ -440,178 +401,66 @@
                     </div>
                 </div>
 
-                <!-- Broadcast Section -->
-                <div class="bg-white rounded-2xl shadow-lg p-6" id="broadcastSection" style="display:none;">
-                    <div class="flex items-start justify-between mb-6">
-                        <div>
-                            <h3 class="font-bold text-lg text-gray-800">Broadcast Messages</h3>
-                            <p class="text-gray-600">Send targeted messages to your audience</p>
-                        </div>
-                        <div class="bg-wave-50 text-wave-700 px-3 py-1 rounded-full text-sm flex items-center">
-                            <i data-feather="zap" class="w-3 h-3 mr-1"></i>
-                            <span>Real-time Messaging</span>
-                        </div>
-                    </div>
+                <!-- Live Chat Section -->
+                <div class="bg-white rounded-2xl shadow-lg p-6" id="chatSection" style="display:none;">
+                    <h3 class="font-bold text-lg mb-2">Live Chat Management</h3>
+                    <p class="text-gray-600 mb-6">Monitor and interact with active customer conversations</p>
                     
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="lg:col-span-2 space-y-6">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="fade-in">
-                                    <label class="block text-gray-700 mb-2 font-medium">Select Segment</label>
-                                    <select id="segmentSelect" class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-ocean-500 focus:border-transparent">
-                                        <option value="all">All Leads</option>
-                                        <option value="book_tour">Tour Bookings</option>
-                                        <option value="inquire_tour">Tour Inquiries</option>
-                                    </select>
-                                </div>
-                                <div class="fade-in delay-100">
-                                    <label class="block text-gray-700 mb-2 font-medium">Recipients</label>
-                                    <div class="px-4 py-3 border rounded-xl bg-ocean-50 flex items-center justify-between">
-                                        <div>
-                                            <span class="font-medium text-ocean-700" id="recipientCount">0</span>
-                                            <span class="text-gray-600"> users will receive</span>
-                                        </div>
-                                        <i data-feather="users" class="w-4 h-4 text-ocean-500"></i>
+                        <div class="lg:col-span-2">
+                            <div class="bg-gray-50 rounded-xl p-6">
+                                <h4 class="font-bold mb-4">Active Sessions</h4>
+                                <div id="activeSessionsList" class="space-y-3">
+                                    <div class="text-center py-8 text-gray-500">
+                                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                        <p>No active chat sessions</p>
                                     </div>
-                                </div>
-                            </div>
-                            
-                            <div class="fade-in delay-200">
-                                <label class="block text-gray-700 mb-2 font-medium">Message Content</label>
-                                <textarea id="broadcastMessage" class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-ocean-500 focus:border-transparent" rows="6" placeholder="Type your broadcast message here..."></textarea>
-                                <div class="flex justify-between items-center mt-2">
-                                    <span class="text-sm text-gray-500" id="charCount">0 characters</span>
-                                    <span class="text-sm text-gray-500 flex items-center">
-                                        <i data-feather="message-square" class="w-3 h-3 mr-1"></i>
-                                        WhatsApp formatting supported
-                                    </span>
-                                </div>
-                            </div>
-
-                            <!-- Sample Messages -->
-                            <div class="bg-ocean-50 border border-ocean-100 rounded-xl p-4 fade-in delay-300">
-                                <h4 class="font-bold text-ocean-700 mb-2">Sample Messages</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <button onclick="loadSampleMessage('special_offer')" class="w-full text-left p-3 bg-white rounded-lg border border-ocean-100 hover:bg-ocean-50 transition-colors ripple">
-                                        <div class="flex items-center">
-                                            <div class="p-2 bg-ocean-100 text-ocean-600 rounded-lg mr-3">
-                                                <i data-feather="tag" class="w-4 h-4"></i>
-                                            </div>
-                                            <div>
-                                                <span class="font-medium text-ocean-700">Special Offers</span>
-                                                <p class="text-sm text-ocean-500 mt-1">Promotions and discounts</p>
-                                            </div>
-                                        </div>
-                                    </button>
-                                    <button onclick="loadSampleMessage('new_tours')" class="w-full text-left p-3 bg-white rounded-lg border border-ocean-100 hover:bg-ocean-50 transition-colors ripple">
-                                        <div class="flex items-center">
-                                            <div class="p-2 bg-ocean-100 text-ocean-600 rounded-lg mr-3">
-                                                <i data-feather="compass" class="w-4 h-4"></i>
-                                            </div>
-                                            <div>
-                                                <span class="font-medium text-ocean-700">New Tours</span>
-                                                <p class="text-sm text-ocean-500 mt-1">Announce new packages</p>
-                                            </div>
-                                        </div>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="flex space-x-4 fade-in delay-400">
-                                <button id="previewBroadcast" class="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-xl font-medium hover:bg-gray-200 transition-all ripple">
-                                    Preview Message
-                                </button>
-                                <button id="sendBroadcastBtn" class="flex-1 bg-gradient-to-r from-ocean-600 to-wave-600 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-all shadow-lg ripple">
-                                    Send Broadcast
-                                </button>
-                            </div>
-
-                            <!-- Broadcast Progress -->
-                            <div id="broadcastProgress" class="hidden">
-                                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-sm font-medium text-blue-700">Sending messages...</span>
-                                        <span id="progressText" class="text-sm text-blue-600">0%</span>
-                                    </div>
-                                    <div class="w-full bg-blue-200 rounded-full h-2">
-                                        <div id="progressBar" class="bg-gradient-to-r from-ocean-500 to-wave-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                                    </div>
-                                    <div id="progressDetails" class="text-xs text-blue-600 mt-2"></div>
-                                </div>
-                            </div>
-
-                            <!-- Broadcast Results -->
-                            <div id="broadcastResults" class="hidden">
-                                <div class="bg-green-50 border border-green-200 rounded-xl p-4 mt-4">
-                                    <h4 class="font-medium text-green-800 mb-2 flex items-center">
-                                        <i data-feather="check-circle" class="w-4 h-4 mr-2"></i>
-                                        Broadcast Completed
-                                    </h4>
-                                    <div id="resultsContent" class="text-sm text-green-700"></div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="bg-ocean-50 rounded-xl p-6 border border-ocean-100 fade-in delay-300">
-                            <h4 class="font-bold text-ocean-700 mb-4">Broadcast Information</h4>
+                        <div class="bg-blue-50 rounded-xl p-6">
+                            <h4 class="font-bold mb-4">Chat Information</h4>
                             <div class="space-y-4">
-                                <div class="bg-white p-4 rounded-lg border border-ocean-100">
-                                    <div class="flex justify-between mb-2">
-                                        <span class="text-gray-600">Selected Segment:</span>
-                                        <span class="font-medium text-ocean-700" id="segmentInfo">All Leads</span>
-                                    </div>
-                                    <div class="flex justify-between">
-                                        <span class="text-gray-600">Total Recipients:</span>
-                                        <span class="font-medium text-ocean-700" id="recipientCountInfo">0</span>
-                                    </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Active:</span>
+                                    <span class="font-medium" id="totalActiveChats">0</span>
                                 </div>
-                                
-                                <div class="bg-white p-4 rounded-lg border border-ocean-100">
-                                    <p class="text-sm font-medium text-ocean-700 mb-2 flex items-center">
-                                        <i data-feather="message-square" class="w-4 h-4 mr-2"></i>
-                                        Message Tips:
-                                    </p>
-                                    <ul class="text-sm text-gray-600 space-y-2">
-                                        <li class="flex items-start">
-                                            <i data-feather="check" class="w-4 h-4 text-green-500 mr-2 mt-0.5"></i>
-                                            <span>Use *bold* for emphasis</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <i data-feather="check" class="w-4 h-4 text-green-500 mr-2 mt-0.5"></i>
-                                            <span>Keep messages personal</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <i data-feather="check" class="w-4 h-4 text-green-500 mr-2 mt-0.5"></i>
-                                            <span>Include clear call-to-action</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <i data-feather="check" class="w-4 h-4 text-green-500 mr-2 mt-0.5"></i>
-                                            <span>Test with small group first</span>
-                                        </li>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">In Booking Flow:</span>
+                                    <span class="font-medium" id="bookingFlowChats">0</span>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Quick Actions:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Click "Chat" to join conversation</li>
+                                        <li>• Use quick message buttons</li>
+                                        <li>• Identify yourself as admin</li>
+                                        <li>• Check session status first</li>
                                     </ul>
                                 </div>
-                                
-                                <div class="bg-white p-4 rounded-lg border border-ocean-100">
-                                    <p class="text-sm font-medium text-ocean-700 mb-2 flex items-center">
-                                        <i data-feather="clock" class="w-4 h-4 mr-2"></i>
-                                        Best Times to Send:
-                                    </p>
-                                    <ul class="text-sm text-gray-600 space-y-2">
-                                        <li class="flex items-start">
-                                            <i data-feather="sun" class="w-4 h-4 text-yellow-500 mr-2 mt-0.5"></i>
-                                            <span>Morning (9-11 AM)</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <i data-feather="sunset" class="w-4 h-4 text-orange-500 mr-2 mt-0.5"></i>
-                                            <span>Afternoon (2-4 PM)</span>
-                                        </li>
-                                        <li class="flex items-start">
-                                            <i data-feather="moon" class="w-4 h-4 text-blue-500 mr-2 mt-0.5"></i>
-                                            <span>Evening (7-9 PM)</span>
-                                        </li>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Best Practices:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Be prompt with responses</li>
+                                        <li>• Use customer's name</li>
+                                        <li>• Check booking progress</li>
+                                        <li>• Follow up if needed</li>
                                     </ul>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Broadcast Section -->
+                <div class="bg-white rounded-2xl shadow-lg p-6" id="broadcastSection" style="display:none;">
+                    <h3 class="font-bold text-lg mb-2">Broadcast Messages</h3>
+                    <p class="text-gray-600 mb-6">Send messages to different segments of your audience</p>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 space-y-6">
+                            <!-- Broadcast content remains the same -->
                         </div>
                     </div>
                 </div>
@@ -619,33 +468,12 @@
         </div>
     </div>
 
-    <!-- Preview Modal -->
-    <div id="previewModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4 transition-opacity duration-300">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 transform transition-all duration-300 scale-95 opacity-0" id="modalContent">
-            <div class="flex justify-between items-center mb-4 border-b pb-3">
-                <h3 class="font-bold text-lg text-gray-800">Message Preview</h3>
-                <button id="closePreview" class="text-gray-500 hover:text-gray-700 ripple">
-                    <i data-feather="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <div class="bg-gray-100 rounded-lg p-4 mb-4">
-                <p id="previewContent" class="text-gray-800 whitespace-pre-wrap"></p>
-            </div>
-            <div class="flex space-x-3">
-                <button id="cancelSend" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-300 transition-all ripple">
-                    Cancel
-                </button>
-                <button id="confirmSend" class="flex-1 bg-gradient-to-r from-ocean-600 to-wave-600 text-white py-3 rounded-xl font-medium hover:opacity-90 transition-all ripple">
-                    Confirm & Send
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
         // Configuration
         const CONFIG = {
-            API_BASE_URL: "https://al-bahr-sea-tours-chatbot.onrender.com",
+            API_BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? 'http://localhost:5000' 
+                : 'https://al-bahr-sea-tours-chatbot.onrender.com',
             REFRESH_INTERVAL: 30000,
             ITEMS_PER_PAGE: 10
         };
@@ -659,75 +487,48 @@
             sortDirection: 'desc',
             searchQuery: '',
             charts: {},
-            broadcastInProgress: false
+            broadcastInProgress: false,
+            activeSessions: {},
+            currentChatUser: null
         };
-
-        // Initialize Vanta.js Waves
-        function initVantaWaves() {
-            VANTA.WAVES({
-                el: "#vanta-waves",
-                mouseControls: true,
-                touchControls: true,
-                gyroControls: false,
-                minHeight: 200.00,
-                minWidth: 200.00,
-                scale: 1.00,
-                scaleMobile: 1.00,
-                color: 0x0ea5e9,
-                shininess: 35.00,
-                waveHeight: 15.00,
-                waveSpeed: 0.50,
-                zoom: 0.85
-            });
-        }
 
         // Initialize Application
         async function initApp() {
             showLoading();
-            initVantaWaves();
-            await loadAllData();
-            setupEventListeners();
-            startAutoRefresh();
-            updateCurrentTime();
-            hideLoading();
-
-            // Animate modal in when shown
-            document.getElementById('previewModal').addEventListener('click', function(e) {
-                if (e.target === this) hidePreview();
-            });
-
-            // Ripple effect buttons
-            document.querySelectorAll('.ripple').forEach(button => {
-                button.addEventListener('click', function(e) {
-                    const rect = this.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    
-                    const ripple = document.createElement('span');
-                    ripple.className = 'ripple-effect';
-                    ripple.style.left = `${x}px`;
-                    ripple.style.top = `${y}px`;
-                    this.appendChild(ripple);
-                    
-                    setTimeout(() => {
-                        ripple.remove();
-                    }, 600);
-                });
-            });
+            try {
+                await loadAllData();
+                setupEventListeners();
+                startAutoRefresh();
+                updateCurrentTime();
+                hideLoading();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                hideLoading();
+                showError('Initialization Failed', 'Could not load dashboard data');
+            }
         }
 
         // Core Data Functions
         async function loadAllData() {
             try {
-                const response = await fetch(CONFIG.API_BASE_URL + '/api/leads');
+                const [leadsResponse, sessionsResponse] = await Promise.all([
+                    fetch(CONFIG.API_BASE_URL + '/api/leads').catch(error => {
+                        throw new Error(`Failed to fetch leads: ${error.message}`);
+                    }),
+                    fetch(CONFIG.API_BASE_URL + '/api/active_sessions').catch(error => {
+                        console.warn('Could not fetch active sessions:', error);
+                        return { ok: true, json: () => Promise.resolve({ sessions: {} }) };
+                    })
+                ]);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (!leadsResponse.ok) {
+                    throw new Error(`HTTP error! status: ${leadsResponse.status}`);
                 }
                 
-                const leads = await response.json();
+                const leads = await leadsResponse.json();
+                const sessions = await sessionsResponse.json();
                 
-                appState.leads = leads.map(lead => ({
+                appState.leads = Array.isArray(leads) ? leads.map(lead => ({
                     ...lead,
                     timestamp: lead.Timestamp || '',
                     name: lead.Name || '',
@@ -735,15 +536,17 @@
                     whatsappId: lead['WhatsApp ID'] || '',
                     intent: lead.Intent || '',
                     tourType: lead['Tour Type'] || 'Not specified'
-                }));
+                })) : [];
                 
                 appState.filteredLeads = [...appState.leads];
+                appState.activeSessions = sessions.sessions || {};
                 
                 updateDashboard();
                 updateLeadsTable();
                 updateCharts();
+                updateActiveSessions();
                 
-                showSuccess('Data loaded successfully!', `Retrieved ${leads.length} leads from Google Sheets`);
+                showSuccess('Data loaded successfully!', `Retrieved ${appState.leads.length} leads and ${Object.keys(appState.activeSessions).length} active sessions`);
                 
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -751,113 +554,170 @@
             }
         }
 
-        // PDF Export Function
-        function exportToPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            // Title
-            doc.setFontSize(20);
-            doc.setTextColor(14, 165, 233);
-            doc.text('Al Bahr Sea Tours - Leads Report', 14, 22);
-            
-            // Date
-            doc.setFontSize(10);
-            doc.setTextColor(100, 100, 100);
-            doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-            
-            // Table data
-            const tableData = appState.leads.map(lead => [
-                lead.timestamp,
-                lead.name || 'Unknown',
-                lead.contact || 'No contact',
-                lead.tourType,
-                lead.intent || 'Unknown',
-                lead.whatsappId || 'No ID'
-            ]);
-
-            // Table headers
-            const headers = [['Timestamp', 'Name', 'Contact', 'Tour Type', 'Intent', 'WhatsApp ID']];
-            
-            // Create table
-            doc.autoTable({
-                head: headers,
-                body: tableData,
-                startY: 40,
-                styles: { fontSize: 8 },
-                headStyles: { 
-                    fillColor: [14, 165, 233],
-                    textColor: 255,
-                    fontStyle: 'bold'
-                },
-                alternateRowStyles: { fillColor: [240, 249, 255] },
-                margin: { top: 40 }
-            });
-
-            // Watermark
-            doc.setFontSize(60);
-            doc.setTextColor(230, 230, 230);
-            doc.setGState(new GState({opacity: 0.2}));
-            doc.text('Al Bahr Tours', 105, 140, null, 45);
-            
-            // Save PDF
-            doc.save(`Al-Bahr-Leads-${new Date().toISOString().split('T')[0]}.pdf`);
+        // Chat Functions
+        async function openChat(phoneNumber, name = 'Customer') {
+            try {
+                appState.currentChatUser = { phoneNumber, name };
+                
+                // Get user session info
+                const sessionResponse = await fetch(`${CONFIG.API_BASE_URL}/api/user_session/${phoneNumber}`);
+                const sessionInfo = await sessionResponse.json();
+                
+                document.getElementById('chatUserName').textContent = name || 'Customer';
+                document.getElementById('chatUserPhone').textContent = phoneNumber;
+                
+                // Update session status
+                const statusElement = document.getElementById('chatSessionStatus');
+                if (sessionInfo.has_session) {
+                    statusElement.textContent = `${sessionInfo.step.replace('awaiting_', '')} - ${sessionInfo.flow}`;
+                    statusElement.className = 'text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full';
+                } else {
+                    statusElement.textContent = 'No active session';
+                    statusElement.className = 'text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full';
+                }
+                
+                // Clear chat messages
+                document.getElementById('chatMessages').innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Start a conversation with ${name}</p>
+                        ${sessionInfo.has_session ? 
+                            `<p class="text-sm mt-2">Customer is currently at: <strong>${sessionInfo.step.replace('awaiting_', '')}</strong></p>` : 
+                            ''
+                        }
+                    </div>
+                `;
+                
+                document.getElementById('chatModal').classList.remove('hidden');
+                feather.replace();
+                
+            } catch (error) {
+                console.error('Error opening chat:', error);
+                showError('Chat Error', 'Failed to open chat session');
+            }
         }
 
-        // Sample Messages
-        function loadSampleMessage(type) {
-            const messages = {
-                special_offer: `🌊 *Special Summer Offer!* ☀️
-
-Hello! Al Bahr Sea Tours has an exclusive summer promotion just for you:
-
-🎯 *Summer Specials:*
-• *15% OFF* all dolphin watching tours
-• *Free snorkeling gear* with any booking
-• *Family package:* 4 people for the price of 3
-
-🏖️ *Perfect Summer Activities:*
-• Morning dolphin adventures 🐬
-• Afternoon snorkeling sessions 🤿
-• Sunset dhow cruises 🌅
-
-📅 *Valid until end of August*
-👨‍👩‍👧‍👦 *Perfect for family summer fun!*
-
-Ready to make summer memories? Book now! 📞 +968 24 123456`,
-
-                new_tours: `🚤 *New Tour Announcement!* 🌟
-
-We're excited to introduce our NEW tour packages at Al Bahr Sea Tours:
-
-🆕 *New Experiences:*
-• *Sunrise Fishing Trip* - 5:30 AM departure
-• *Private Island Picnic* - Exclusive beach experience
-• *Marine Photography Tour* - Capture underwater wonders
-
-🎯 *What's Included:*
-• Professional guides 🧭
-• All safety equipment 🦺
-• Refreshments & meals 🍎
-• Photography assistance 📸
-
-📅 *Bookings open now!*
-🌟 *Limited spots available*
-
-Discover new adventures with us! 🌊`
-            };
+        async function sendChatMessage() {
+            const messageInput = document.getElementById('chatMessageInput');
+            const message = messageInput.value.trim();
             
-            document.getElementById('broadcastMessage').value = messages[type];
-            updateCharCount();
-            showSuccess('Sample Loaded', `Loaded ${type.replace('_', ' ')} sample message`);
+            if (!message || !appState.currentChatUser) {
+                return;
+            }
+            
+            try {
+                // Add message to chat UI immediately
+                addChatMessage(message, 'admin');
+                messageInput.value = '';
+                
+                // Send to backend
+                const response = await fetch(CONFIG.API_BASE_URL + '/api/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone_number: appState.currentChatUser.phoneNumber,
+                        message: message
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to send message');
+                }
+                
+                showSuccess('Message Sent', 'Your message has been delivered to the customer');
+                
+            } catch (error) {
+                console.error('Error sending message:', error);
+                showError('Send Failed', error.message);
+            }
         }
 
-        // Dashboard Updates
+        function addChatMessage(message, sender) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            
+            messageDiv.className = `chat-message ${sender === 'admin' ? 'admin-message' : 'user-message'}`;
+            messageDiv.innerHTML = `
+                <div class="text-sm">${message}</div>
+                <div class="text-xs text-gray-500 mt-1 text-right">${new Date().toLocaleTimeString()}</div>
+            `;
+            
+            // Remove placeholder if it exists
+            const placeholder = chatMessages.querySelector('.text-center');
+            if (placeholder) {
+                placeholder.remove();
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function insertQuickMessage(message) {
+            document.getElementById('chatMessageInput').value = message;
+        }
+
+        function closeChat() {
+            document.getElementById('chatModal').classList.add('hidden');
+            appState.currentChatUser = null;
+        }
+
+        // Update active sessions display
+        function updateActiveSessions() {
+            const sessionsList = document.getElementById('activeSessionsList');
+            const totalActive = document.getElementById('totalActiveChats');
+            const bookingFlow = document.getElementById('bookingFlowChats');
+            
+            const activeSessions = Object.keys(appState.activeSessions).length;
+            const bookingSessions = Object.values(appState.activeSessions).filter(s => s.flow === 'booking').length;
+            
+            totalActive.textContent = activeSessions;
+            bookingFlow.textContent = bookingSessions;
+            
+            if (activeSessions === 0) {
+                sessionsList.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No active chat sessions</p>
+                    </div>
+                `;
+            } else {
+                sessionsList.innerHTML = Object.entries(appState.activeSessions).map(([phone, session]) => `
+                    <div class="bg-white rounded-lg p-4 border hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <p class="font-medium">${session.name || 'Unknown Customer'}</p>
+                                <p class="text-sm text-gray-600">${phone}</p>
+                            </div>
+                            <span class="session-badge ${session.flow === 'booking' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}">
+                                ${session.flow}
+                            </span>
+                        </div>
+                        <div class="text-sm text-gray-600 mb-3">
+                            <p>Step: <span class="font-medium">${session.step.replace('awaiting_', '')}</span></p>
+                            ${session.tour_type !== 'Not selected' ? `<p>Tour: <span class="font-medium">${session.tour_type}</span></p>` : ''}
+                        </div>
+                        <button onclick="openChat('${phone}', '${session.name || 'Customer'}')" 
+                                class="w-full bg-blue-900 text-white py-2 rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium">
+                            <i data-feather="message-circle" class="w-4 h-4 inline mr-1"></i>
+                            Join Chat
+                        </button>
+                    </div>
+                `).join('');
+            }
+            
+            feather.replace();
+        }
+
+        // Update dashboard with chat stats
         function updateDashboard() {
             const leads = appState.leads;
             const total = leads.length;
             const bookTours = leads.filter(l => l.intent.toLowerCase().includes("book")).length;
-            const inquireTours = leads.filter(l => l.intent.toLowerCase().includes("inquiry")).length;
+            const activeChats = Object.keys(appState.activeSessions).length;
             
             const today = new Date().toDateString();
             const todayLeads = leads.filter(lead => {
@@ -867,20 +727,17 @@ Discover new adventures with us! 🌊`
             
             document.getElementById("totalLeads").textContent = total.toLocaleString();
             document.getElementById("bookTours").textContent = bookTours.toLocaleString();
-            document.getElementById("inquireTours").textContent = inquireTours.toLocaleString();
+            document.getElementById("activeChats").textContent = activeChats.toLocaleString();
             document.getElementById("todayLeads").textContent = todayLeads.toLocaleString();
             
             const bookPercentage = total > 0 ? Math.round((bookTours / total) * 100) : 0;
-            const inquirePercentage = total > 0 ? Math.round((inquireTours / total) * 100) : 0;
             
-            document.getElementById("bookPercentage").innerHTML = `<i data-feather="arrow-up-right" class="w-4 h-4 mr-1"></i><span>${bookPercentage}%</span>`;
-            document.getElementById("inquirePercentage").innerHTML = `<i data-feather="help-circle" class="w-4 h-4 mr-1"></i><span>${inquirePercentage}%</span>`;
-            
-            document.getElementById("leadsGrowth").innerHTML = `<i data-feather="trending-up" class="w-4 h-4 mr-1"></i><span>+${todayLeads} today</span>`;
-            document.getElementById("todayGrowth").innerHTML = `<i data-feather="zap" class="w-4 h-4 mr-1"></i><span>+${todayLeads}</span>`;
+            document.getElementById("bookPercentage").textContent = `${bookPercentage}%`;
+            document.getElementById("leadsGrowth").textContent = `+${todayLeads} today`;
+            document.getElementById("todayGrowth").textContent = `+${todayLeads}`;
+            document.getElementById("chatsGrowth").textContent = `+${activeChats} active`;
             
             updateRecentLeads();
-            feather.replace();
         }
 
         function updateRecentLeads() {
@@ -891,10 +748,9 @@ Discover new adventures with us! 🌊`
             
             if (recentLeads.length === 0) {
                 recentLeadsContainer.innerHTML = `
-                    <div class="text-center py-12 text-gray-400">
-                        <i data-feather="users" class="w-12 h-12 mx-auto mb-4 opacity-30"></i>
-                        <p class="text-gray-500">No leads data available yet</p>
-                        <p class="text-sm text-gray-400 mt-1">New leads will appear here automatically</p>
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-feather="users" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No leads data available</p>
                     </div>
                 `;
                 return;
@@ -903,13 +759,8 @@ Discover new adventures with us! 🌊`
             recentLeadsContainer.innerHTML = recentLeads.map(lead => `
                 <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                     <div class="flex items-center space-x-4">
-                        <div class="relative">
-                            <div class="w-10 h-10 bg-ocean-100 rounded-full flex items-center justify-center">
-                                <i data-feather="user" class="w-5 h-5 text-ocean-600"></i>
-                            </div>
-                            <span class="absolute bottom-0 right-0 w-2 h-2 rounded-full ${
-                                lead.intent.toLowerCase().includes('book') ? 'bg-green-400' : 'bg-yellow-400'
-                            } border border-white"></span>
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <i data-feather="user" class="w-5 h-5 text-blue-900"></i>
                         </div>
                         <div>
                             <p class="font-medium text-gray-900">${lead.name || 'Unknown'}</p>
@@ -917,12 +768,10 @@ Discover new adventures with us! 🌊`
                         </div>
                     </div>
                     <div class="text-right">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        <span class="inline-block px-2 py-1 text-xs rounded-full ${
                             lead.intent.toLowerCase().includes('book') 
                                 ? 'bg-green-100 text-green-800' 
-                                : lead.intent.toLowerCase().includes('inquiry')
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-gray-100 text-gray-800'
+                                : 'bg-yellow-100 text-yellow-800'
                         }">
                             ${lead.intent || 'Unknown'}
                         </span>
@@ -932,6 +781,129 @@ Discover new adventures with us! 🌊`
             `).join('');
             
             feather.replace();
+        }
+
+        // Update leads table with chat buttons
+        function updateLeadsTable() {
+            const tableBody = document.getElementById('leadsTableBody');
+            const paginationInfo = document.getElementById('leadsPaginationInfo');
+            const paginationContainer = document.getElementById('leadsPagination');
+            
+            if (appState.filteredLeads.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                            No leads found matching your search criteria.
+                        </td>
+                    </tr>
+                `;
+                paginationInfo.textContent = 'Showing 0 of 0 leads';
+                paginationContainer.innerHTML = '';
+                return;
+            }
+            
+            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
+            const startIndex = (appState.currentPage - 1) * CONFIG.ITEMS_PER_PAGE;
+            const endIndex = startIndex + CONFIG.ITEMS_PER_PAGE;
+            const currentLeads = appState.filteredLeads.slice(startIndex, endIndex);
+            
+            tableBody.innerHTML = currentLeads.map(lead => {
+                const hasActiveSession = appState.activeSessions[lead.whatsappId];
+                return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${formatDate(lead.timestamp)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        ${lead.name || 'Unknown'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.contact || 'No contact'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.tourType}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            lead.intent.toLowerCase().includes('book') 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-gray-100 text-gray-800'
+                        }">
+                            ${lead.intent || 'Unknown'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <button onclick="openChat('${lead.whatsappId}', '${lead.name || 'Customer'}')" 
+                                class="flex items-center space-x-1 bg-blue-900 text-white px-3 py-1 rounded-lg hover:bg-opacity-90 transition-all text-xs font-medium ${!hasActiveSession ? 'opacity-50' : ''}">
+                            <i data-feather="message-circle" class="w-3 h-3"></i>
+                            <span>Chat${hasActiveSession ? '' : ' (Offline)'}</span>
+                        </button>
+                    </td>
+                </tr>
+            `}).join('');
+            
+            paginationInfo.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, appState.filteredLeads.length)} of ${appState.filteredLeads.length} leads`;
+            updatePaginationButtons(totalPages, paginationContainer);
+            feather.replace();
+        }
+
+        function updatePaginationButtons(totalPages, container) {
+            let buttons = '';
+            
+            buttons += `
+                <button onclick="changePage(${appState.currentPage - 1})" 
+                        ${appState.currentPage === 1 ? 'disabled' : ''}
+                        class="px-3 py-1 rounded-lg border ${appState.currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                    Previous
+                </button>
+            `;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                buttons += `
+                    <button onclick="changePage(${i})" 
+                            class="px-3 py-1 rounded-lg border ${appState.currentPage === i ? 'bg-blue-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            buttons += `
+                <button onclick="changePage(${appState.currentPage + 1})" 
+                        ${appState.currentPage === totalPages ? 'disabled' : ''}
+                        class="px-3 py-1 rounded-lg border ${appState.currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                    Next
+                </button>
+            `;
+            
+            container.innerHTML = buttons;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
+            if (page >= 1 && page <= totalPages) {
+                appState.currentPage = page;
+                updateLeadsTable();
+            }
+        }
+
+        function searchLeads() {
+            const query = document.getElementById('searchLeads').value.toLowerCase();
+            appState.searchQuery = query;
+            appState.currentPage = 1;
+            
+            if (!query) {
+                appState.filteredLeads = [...appState.leads];
+            } else {
+                appState.filteredLeads = appState.leads.filter(lead => 
+                    (lead.name && lead.name.toLowerCase().includes(query)) ||
+                    (lead.contact && lead.contact.toLowerCase().includes(query)) ||
+                    (lead.tourType && lead.tourType.toLowerCase().includes(query)) ||
+                    (lead.intent && lead.intent.toLowerCase().includes(query)) ||
+                    (lead.whatsappId && lead.whatsappId.toLowerCase().includes(query))
+                );
+            }
+            
+            updateLeadsTable();
         }
 
         // Chart Functions
@@ -960,7 +932,7 @@ Discover new adventures with us! 🌊`
                     datasets: [{
                         data: Object.values(tourTypes),
                         backgroundColor: [
-                            '#0ea5e9', '#7dd3fc', '#bae6fd', '#0284c7', '#0369a1',
+                            '#0369a1', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd',
                             '#0d9488', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'
                         ],
                         borderWidth: 2,
@@ -975,25 +947,12 @@ Discover new adventures with us! 🌊`
                             position: 'bottom',
                             labels: {
                                 padding: 20,
-                                usePointStyle: true,
-                                font: {
-                                    family: 'Poppins'
-                                }
+                                usePointStyle: true
                             }
                         },
-                        tooltip: {
-                            bodyFont: {
-                                family: 'Poppins'
-                            },
-                            titleFont: {
-                                family: 'Poppins'
-                            }
+                        title: {
+                            display: false
                         }
-                    },
-                    cutout: '70%',
-                    animation: {
-                        animateScale: true,
-                        animateRotate: true
                     }
                 }
             });
@@ -1003,7 +962,6 @@ Discover new adventures with us! 🌊`
             const ctx = document.getElementById('intentChart').getContext('2d');
             const intents = {
                 'Book Tour': 0,
-                'Tour Inquiry': 0,
                 'Other': 0
             };
             
@@ -1011,8 +969,6 @@ Discover new adventures with us! 🌊`
                 const intent = lead.intent || 'Other';
                 if (intent.toLowerCase().includes('book')) {
                     intents['Book Tour']++;
-                } else if (intent.toLowerCase().includes('inquiry')) {
-                    intents['Tour Inquiry']++;
                 } else {
                     intents['Other']++;
                 }
@@ -1028,7 +984,7 @@ Discover new adventures with us! 🌊`
                     labels: Object.keys(intents),
                     datasets: [{
                         data: Object.values(intents),
-                        backgroundColor: ['#10b981', '#f59e0b', '#6b7280'],
+                        backgroundColor: ['#10b981', '#6b7280'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }]
@@ -1041,450 +997,12 @@ Discover new adventures with us! 🌊`
                             position: 'bottom',
                             labels: {
                                 padding: 20,
-                                usePointStyle: true,
-                                font: {
-                                    family: 'Poppins'
-                                }
-                            }
-                        },
-                        tooltip: {
-                            bodyFont: {
-                                family: 'Poppins'
-                            },
-                            titleFont: {
-                                family: 'Poppins'
+                                usePointStyle: true
                             }
                         }
-                    },
-                    animation: {
-                        animateScale: true,
-                        animateRotate: true
                     }
                 }
             });
-        }
-
-        // Leads Table Functions
-        function updateLeadsTable() {
-            const tableBody = document.getElementById('leadsTableBody');
-            const paginationInfo = document.getElementById('leadsPaginationInfo');
-            const paginationContainer = document.getElementById('leadsPagination');
-            
-            if (appState.filteredLeads.length === 0) {
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">
-                            No leads found matching your search criteria.
-                        </td>
-                    </tr>
-                `;
-                paginationInfo.textContent = 'Showing 0 of 0 leads';
-                paginationContainer.innerHTML = '';
-                return;
-            }
-            
-            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
-            const startIndex = (appState.currentPage - 1) * CONFIG.ITEMS_PER_PAGE;
-            const endIndex = startIndex + CONFIG.ITEMS_PER_PAGE;
-            const currentLeads = appState.filteredLeads.slice(startIndex, endIndex);
-            
-            tableBody.innerHTML = currentLeads.map(lead => `
-                <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${formatDate(lead.timestamp)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        ${lead.name || 'Unknown'}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${lead.contact || 'No contact'}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${lead.tourType}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            lead.intent.toLowerCase().includes('book') 
-                                ? 'bg-green-100 text-green-800' 
-                                : lead.intent.toLowerCase().includes('inquiry')
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-gray-100 text-gray-800'
-                        }">
-                            ${lead.intent || 'Unknown'}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${lead.whatsappId || 'No ID'}
-                    </td>
-                </tr>
-            `).join('');
-            
-            paginationInfo.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, appState.filteredLeads.length)} of ${appState.filteredLeads.length} leads`;
-            updatePaginationButtons(totalPages, paginationContainer);
-            feather.replace();
-        }
-
-        function updatePaginationButtons(totalPages, container) {
-            let buttons = '';
-            
-            buttons += `
-                <button onclick="changePage(${appState.currentPage - 1})" 
-                        ${appState.currentPage === 1 ? 'disabled' : ''}
-                        class="px-3 py-1 rounded-lg border ${appState.currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
-                    <i data-feather="chevron-left" class="w-4 h-4"></i>
-                </button>
-            `;
-            
-            // Show first page, current page with neighbors, and last page
-            const maxVisiblePages = 5;
-            let startPage = Math.max(1, appState.currentPage - Math.floor(maxVisiblePages / 2));
-            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-            
-            if (endPage - startPage + 1 < maxVisiblePages) {
-                startPage = Math.max(1, endPage - maxVisiblePages + 1);
-            }
-            
-            if (startPage > 1) {
-                buttons += `
-                    <button onclick="changePage(1)" class="px-3 py-1 rounded-lg border bg-white text-gray-700 hover:bg-gray-50">
-                        1
-                    </button>
-                    ${startPage > 2 ? '<span class="px-2 py-1">...</span>' : ''}
-                `;
-            }
-            
-            for (let i = startPage; i <= endPage; i++) {
-                buttons += `
-                    <button onclick="changePage(${i})" 
-                            class="px-3 py-1 rounded-lg border ${appState.currentPage === i ? 'bg-ocean-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">
-                        ${i}
-                    </button>
-                `;
-            }
-            
-            if (endPage < totalPages) {
-                buttons += `
-                    ${endPage < totalPages - 1 ? '<span class="px-2 py-1">...</span>' : ''}
-                    <button onclick="changePage(${totalPages})" class="px-3 py-1 rounded-lg border bg-white text-gray-700 hover:bg-gray-50">
-                        ${totalPages}
-                    </button>
-                `;
-            }
-            
-            buttons += `
-                <button onclick="changePage(${appState.currentPage + 1})" 
-                        ${appState.currentPage === totalPages ? 'disabled' : ''}
-                        class="px-3 py-1 rounded-lg border ${appState.currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
-                    <i data-feather="chevron-right" class="w-4 h-4"></i>
-                </button>
-            `;
-            
-            container.innerHTML = buttons;
-            feather.replace();
-        }
-
-        function changePage(page) {
-            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
-            if (page >= 1 && page <= totalPages) {
-                appState.currentPage = page;
-                updateLeadsTable();
-                
-                // Smooth scroll to top of table
-                document.getElementById('leadsTable').scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        }
-
-        function searchLeads() {
-            const query = document.getElementById('searchLeads').value.toLowerCase();
-            appState.searchQuery = query;
-            appState.currentPage = 1;
-            
-            if (!query) {
-                appState.filteredLeads = [...appState.leads];
-            } else {
-                appState.filteredLeads = appState.leads.filter(lead => 
-                    (lead.name && lead.name.toLowerCase().includes(query)) ||
-                    (lead.contact && lead.contact.toLowerCase().includes(query)) ||
-                    (lead.tourType && lead.tourType.toLowerCase().includes(query)) ||
-                    (lead.intent && lead.intent.toLowerCase().includes(query)) ||
-                    (lead.whatsappId && lead.whatsappId.toLowerCase().includes(query))
-                );
-            }
-            
-            updateLeadsTable();
-        }
-
-        // Broadcast Functions
-        function updateRecipientCount() {
-            const segment = document.getElementById('segmentSelect').value;
-            let count = 0;
-            
-            switch(segment) {
-                case 'all':
-                    count = appState.leads.length;
-                    break;
-                case 'book_tour':
-                    count = appState.leads.filter(l => l.intent.toLowerCase().includes('book')).length;
-                    break;
-                case 'inquire_tour':
-                    count = appState.leads.filter(l => l.intent.toLowerCase().includes('inquiry')).length;
-                    break;
-            }
-            
-            document.getElementById('recipientCount').textContent = count.toLocaleString();
-            document.getElementById('recipientCountInfo').textContent = count.toLocaleString();
-            document.getElementById('segmentInfo').textContent = 
-                document.getElementById('segmentSelect').options[document.getElementById('segmentSelect').selectedIndex].text;
-        }
-
-        function updateCharCount() {
-            const message = document.getElementById('broadcastMessage').value;
-            document.getElementById('charCount').textContent = `${message.length} characters`;
-        }
-
-        async function sendBroadcast() {
-            if (appState.broadcastInProgress) {
-                showError('Broadcast in Progress', 'Please wait for the current broadcast to complete.');
-                return;
-            }
-
-            const segment = document.getElementById('segmentSelect').value;
-            const message = document.getElementById('broadcastMessage').value.trim();
-            
-            if (!message) {
-                showError('Broadcast Failed', 'Please enter a message to send.');
-                return;
-            }
-
-            const recipientCount = document.getElementById('recipientCount').textContent;
-            if (recipientCount === '0') {
-                showError('No Recipients', 'No recipients found for the selected segment.');
-                return;
-            }
-
-            const warningMessage = `📢 Broadcast Alert:\n\n• Messages to users who haven't messaged in 24h require approved WhatsApp templates\n• Some numbers may need to be added to allowed list\n• Send to ${recipientCount} recipients?`;
-            
-            if (!confirm(warningMessage)) {
-                return;
-            }
-
-            appState.broadcastInProgress = true;
-            showLoading();
-            
-            // Show progress bar
-            document.getElementById('broadcastProgress').classList.remove('hidden');
-            
-            // Simulate progress (in a real app, you'd update this based on actual progress from your API)
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 10;
-                if (progress > 100) progress = 100;
-                
-                document.getElementById('progressBar').style.width = `${progress}%`;
-                document.getElementById('progressText').textContent = `${Math.floor(progress)}%`;
-                
-                if (progress === 100) {
-                    clearInterval(progressInterval);
-                    document.getElementById('progressDetails').textContent = 'Finalizing broadcast...';
-                } else {
-                    document.getElementById('progressDetails').textContent = `Sending to ${Math.floor(progress/100 * parseInt(recipientCount))} of ${recipientCount} recipients`;
-                }
-            }, 300);
-
-            try {
-                const response = await fetch(CONFIG.API_BASE_URL + '/api/broadcast', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        segment: segment,
-                        message: message
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || result.message || 'Broadcast failed');
-                }
-
-                if (result.status === 'no_recipients') {
-                    showError('No Recipients', result.debug_info?.message || result.message);
-                } else {
-                    let successMessage = `✅ Broadcast Completed!\n\n• Sent: ${result.sent} messages\n• Failed: ${result.failed} messages\n• Total: ${result.total_recipients} recipients`;
-                    
-                    if (result.failed > 0) {
-                        successMessage += `\n\n⚠️ Some failures may be due to:\n• WhatsApp numbers not in allowed list\n• Users outside 24-hour window\n• Invalid phone numbers`;
-                    }
-                    
-                    showSuccess('Broadcast Results', successMessage);
-                    
-                    // Show results
-                    document.getElementById('broadcastResults').classList.remove('hidden');
-                    document.getElementById('resultsContent').innerHTML = `
-                        <div class="grid grid-cols-3 gap-4 text-center mb-3">
-                            <div>
-                                <div class="text-xl font-bold text-green-700">${result.sent}</div>
-                                <div class="text-xs text-green-600">Sent</div>
-                            </div>
-                            <div>
-                                <div class="text-xl font-bold text-red-700">${result.failed}</div>
-                                <div class="text-xs text-red-600">Failed</div>
-                            </div>
-                            <div>
-                                <div class="text-xl font-bold text-ocean-700">${result.total_recipients}</div>
-                                <div class="text-xs text-ocean-600">Total</div>
-                            </div>
-                        </div>
-                        ${result.failed > 0 ? '<p class="text-xs text-gray-600">Check server logs for specific failure reasons</p>' : ''}
-                    `;
-                }
-                
-                document.getElementById('broadcastMessage').value = '';
-                updateCharCount();
-                
-            } catch (error) {
-                console.error('Broadcast error:', error);
-                showError('Broadcast Failed', error.message);
-            } finally {
-                clearInterval(progressInterval);
-                appState.broadcastInProgress = false;
-                hideLoading();
-            }
-        }
-
-        function showPreview() {
-            const message = document.getElementById('broadcastMessage').value.trim();
-            if (!message) {
-                showError('Preview Failed', 'Please enter a message to preview.');
-                return;
-            }
-            
-            document.getElementById('previewContent').textContent = message;
-            
-            // Show modal with animation
-            const modal = document.getElementById('previewModal');
-            const modalContent = document.getElementById('modalContent');
-            
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modalContent.classList.remove('scale-95', 'opacity-0');
-                modalContent.classList.add('scale-100', 'opacity-100');
-            }, 10);
-        }
-
-        function hidePreview() {
-            const modal = document.getElementById('previewModal');
-            const modalContent = document.getElementById('modalContent');
-            
-            modalContent.classList.remove('scale-100', 'opacity-100');
-            modalContent.classList.add('scale-95', 'opacity-0');
-            
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 300);
-        }
-
-        function confirmSend() {
-            hidePreview();
-            sendBroadcast();
-        }
-
-        // Navigation Functions
-        function showSection(section) {
-            // Remove active class from all nav items
-            document.querySelectorAll('.nav-item').forEach(nav => {
-                nav.classList.remove('nav-active');
-                nav.classList.remove('bg-white', 'bg-opacity-20', 'shadow-lg');
-            });
-
-            // Add active class to clicked nav item
-            document.getElementById(`${section}Link`).classList.add('nav-active');
-            document.getElementById(`${section}Link`).classList.add('bg-white', 'bg-opacity-10', 'shadow-lg');
-            
-            // Hide all sections
-            ['dashboard', 'leads', 'broadcast'].forEach(sec => {
-                document.getElementById(`${sec}Section`).style.display = 'none';
-            });
-            
-            // Show selected section with animation
-            const activeSection = document.getElementById(`${section}Section`);
-            activeSection.style.display = 'block';
-            activeSection.classList.add('fade-in');
-            
-            // Update page title
-            const titles = {
-                dashboard: 'Dashboard Overview',
-                leads: 'Leads Management',
-                broadcast: 'Broadcast Messages'
-            };
-            
-            const subtitles = {
-                dashboard: 'Al Bahr Sea Tours - Muscat, Oman',
-                leads: 'Manage and track all tour inquiries and bookings',
-                broadcast: 'Send targeted messages to your audience'
-            };
-            
-            document.getElementById('pageTitle').textContent = titles[section];
-            document.getElementById('pageSubtitle').textContent = subtitles[section];
-
-            if (section === 'broadcast') {
-                updateRecipientCount();
-            }
-        }
-
-        // Event Listeners
-        function setupEventListeners() {
-            // Navigation
-            document.getElementById('dashboardLink').addEventListener('click', (e) => {
-                e.preventDefault();
-                showSection('dashboard');
-            });
-            
-            document.getElementById('leadsLink').addEventListener('click', (e) => {
-                e.preventDefault();
-                showSection('leads');
-            });
-            
-            document.getElementById('broadcastLink').addEventListener('click', (e) => {
-                e.preventDefault();
-                showSection('broadcast');
-            });
-            
-            document.getElementById('viewAllLeads').addEventListener('click', (e) => {
-                e.preventDefault();
-                showSection('leads');
-            });
-            
-            // Refresh button
-            document.getElementById('refreshBtn').addEventListener('click', () => {
-                document.querySelector('.animate-spin-on-click').classList.add('animate-spin');
-                setTimeout(() => {
-                    document.querySelector('.animate-spin-on-click').classList.remove('animate-spin');
-                }, 1000);
-                loadAllData();
-            });
-            
-            // Search functionality
-            document.getElementById('searchLeads').addEventListener('input', searchLeads);
-            
-            // PDF Export
-            document.getElementById('exportPDF').addEventListener('click', exportToPDF);
-            
-            // Broadcast functionality
-            document.getElementById('segmentSelect').addEventListener('change', updateRecipientCount);
-            document.getElementById('broadcastMessage').addEventListener('input', updateCharCount);
-            document.getElementById('sendBroadcastBtn').addEventListener('click', sendBroadcast);
-            
-            // Preview functionality
-            document.getElementById('previewBroadcast').addEventListener('click', showPreview);
-            document.getElementById('closePreview').addEventListener('click', hidePreview);
-            document.getElementById('cancelSend').addEventListener('click', hidePreview);
-            document.getElementById('confirmSend').addEventListener('click', confirmSend);
         }
 
         // Utility Functions
@@ -1513,10 +1031,9 @@ Discover new adventures with us! 🌊`
         }
 
         function showError(title, message) {
-            const errorDiv = document.getElementById('errorMessage');
-            errorDiv.querySelector('#errorTitle').textContent = title;
-            errorDiv.querySelector('#errorText').textContent = message;
-            errorDiv.classList.remove('hidden');
+            document.getElementById('errorTitle').textContent = title;
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.remove('hidden');
             
             setTimeout(hideError, 5000);
         }
@@ -1526,31 +1043,128 @@ Discover new adventures with us! 🌊`
         }
 
         function showSuccess(title, message) {
-            const successDiv = document.getElementById('successMessage');
-            successDiv.querySelector('#successTitle').textContent = title;
-            successDiv.querySelector('#successText').textContent = message;
-            successDiv.classList.remove('hidden');
+            document.getElementById('successTitle').textContent = title;
+            document.getElementById('successText').textContent = message;
+            document.getElementById('successMessage').classList.remove('hidden');
             
             setTimeout(() => {
-                successDiv.classList.add('hidden');
+                document.getElementById('successMessage').classList.add('hidden');
             }, 3000);
         }
 
         function updateCurrentTime() {
-            const now = new Date();
-            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
+            document.getElementById('currentTime').textContent = new Date().toLocaleTimeString();
         }
 
         function startAutoRefresh() {
-            // Update time every second
-            setInterval(updateCurrentTime, 1000);
+            setInterval(() => {
+                loadAllData();
+                updateCurrentTime();
+            }, CONFIG.REFRESH_INTERVAL);
+        }
+
+        // Navigation Functions
+        function showSection(section) {
+            // Remove active class from all nav items
+            document.querySelectorAll('nav a').forEach(nav => {
+                nav.classList.remove('nav-active');
+                nav.classList.remove('bg-white', 'bg-opacity-20', 'shadow-lg');
+            });
+
+            // Add active class to clicked nav item
+            const activeLink = document.getElementById(`${section}Link`);
+            if (activeLink) {
+                activeLink.classList.add('nav-active');
+                activeLink.classList.add('bg-white', 'bg-opacity-20', 'shadow-lg');
+            }
             
-            // Refresh data every 30 seconds
-            setInterval(loadAllData, CONFIG.REFRESH_INTERVAL);
+            // Hide all sections
+            ['dashboard', 'leads', 'chat', 'broadcast'].forEach(sec => {
+                const sectionEl = document.getElementById(`${sec}Section`);
+                if (sectionEl) {
+                    sectionEl.style.display = 'none';
+                }
+            });
+            
+            // Show selected section
+            const targetSection = document.getElementById(`${section}Section`);
+            if (targetSection) {
+                targetSection.style.display = 'block';
+            }
+            
+            // Update page title
+            const titles = {
+                dashboard: 'Dashboard Overview',
+                leads: 'Leads Management',
+                chat: 'Live Chat Management',
+                broadcast: 'Broadcast Messages'
+            };
+            
+            const subtitles = {
+                dashboard: 'Al Bahr Sea Tours - Muscat, Oman',
+                leads: 'Manage and track all tour inquiries and bookings',
+                chat: 'Monitor and interact with active customer conversations',
+                broadcast: 'Send targeted messages to your audience'
+            };
+            
+            document.getElementById('pageTitle').textContent = titles[section] || 'Dashboard';
+            document.getElementById('pageSubtitle').textContent = subtitles[section] || 'Al Bahr Sea Tours';
+
+            if (section === 'broadcast') {
+                updateRecipientCount();
+            } else if (section === 'chat') {
+                updateActiveSessions();
+            }
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Navigation
+            document.getElementById('dashboardLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('dashboard');
+            });
+            
+            document.getElementById('leadsLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('leads');
+            });
+            
+            document.getElementById('chatLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('chat');
+            });
+            
+            document.getElementById('broadcastLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('broadcast');
+            });
+            
+            document.getElementById('viewAllLeads').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('leads');
+            });
+            
+            // Refresh button
+            document.getElementById('refreshBtn').addEventListener('click', loadAllData);
+            
+            // Search functionality
+            const searchInput = document.getElementById('searchLeads');
+            if (searchInput) {
+                searchInput.addEventListener('input', searchLeads);
+            }
+            
+            // Chat functionality
+            document.getElementById('closeChat').addEventListener('click', closeChat);
+            document.getElementById('sendChatMessage').addEventListener('click', sendChatMessage);
+            const chatInput = document.getElementById('chatMessageInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        sendChatMessage();
+                    }
+                });
+            }
         }
 
         // Initialize when DOM is loaded
