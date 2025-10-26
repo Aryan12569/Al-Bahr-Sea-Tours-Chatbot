@@ -865,6 +865,49 @@ Muscat, Oman""",
         return False
 
 # ==============================
+# ADMIN CHAT INTERVENTION FUNCTIONS
+# ==============================
+
+def send_admin_message(phone_number, message):
+    """Send message as admin to specific user"""
+    try:
+        # Add admin identifier to the message
+        admin_message = f"💬 *Admin Support:*\n\n{message}\n\n— Al Bahr Sea Tours Team 🌊"
+        
+        success = send_whatsapp_message(phone_number, admin_message)
+        
+        if success:
+            # Log the admin intervention
+            logger.info(f"✅ Admin message sent to {phone_number}: {message}")
+            return True
+        else:
+            logger.error(f"❌ Failed to send admin message to {phone_number}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"🚨 Error sending admin message: {str(e)}")
+        return False
+
+def get_user_session(phone_number):
+    """Get current session state for a user"""
+    session = booking_sessions.get(phone_number)
+    if session:
+        return {
+            'has_session': True,
+            'step': session.get('step', 'unknown'),
+            'flow': session.get('flow', 'unknown'),
+            'name': session.get('name', 'Not provided'),
+            'contact': session.get('contact', 'Not provided'),
+            'tour_type': session.get('tour_type', 'Not selected'),
+            'adults_count': session.get('adults_count', '0'),
+            'children_count': session.get('children_count', '0'),
+            'total_guests': session.get('total_guests', '0'),
+            'booking_date': session.get('booking_date', 'Not selected')
+        }
+    else:
+        return {'has_session': False}
+
+# ==============================
 # CORS FIX - SIMPLE AND CLEAN
 # ==============================
 
@@ -1176,6 +1219,83 @@ def broadcast():
         logger.error(f"Broadcast error: {str(e)}")
         return jsonify({"error": f"Broadcast failed: {str(e)}"}), 500
 
+# ==============================
+# ADMIN CHAT INTERVENTION ENDPOINTS
+# ==============================
+
+@app.route("/api/send_message", methods=["POST", "OPTIONS"])
+def send_admin_message_endpoint():
+    """Send message as admin to specific user"""
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+        
+    try:
+        data = request.get_json()
+        phone_number = data.get("phone_number")
+        message = data.get("message")
+        
+        if not phone_number or not message:
+            return jsonify({"error": "Phone number and message required"}), 400
+        
+        # Clean the phone number
+        clean_phone = clean_oman_number(phone_number)
+        if not clean_phone:
+            return jsonify({"error": "Invalid phone number format"}), 400
+        
+        success = send_admin_message(clean_phone, message)
+        
+        if success:
+            return jsonify({
+                "status": "message_sent",
+                "message": "Admin message sent successfully",
+                "phone_number": clean_phone
+            })
+        else:
+            return jsonify({"error": "Failed to send message"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error in send_admin_message: {str(e)}")
+        return jsonify({"error": f"Failed to send message: {str(e)}"}), 500
+
+@app.route("/api/user_session/<phone_number>", methods=["GET"])
+def get_user_session_endpoint(phone_number):
+    """Get current session state for a user"""
+    try:
+        # Clean the phone number
+        clean_phone = clean_oman_number(phone_number)
+        if not clean_phone:
+            return jsonify({"error": "Invalid phone number format"}), 400
+        
+        session_info = get_user_session(clean_phone)
+        return jsonify(session_info)
+        
+    except Exception as e:
+        logger.error(f"Error getting user session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/active_sessions", methods=["GET"])
+def get_active_sessions():
+    """Get all active booking sessions"""
+    try:
+        active_sessions = {}
+        for phone, session in booking_sessions.items():
+            active_sessions[phone] = {
+                'step': session.get('step', 'unknown'),
+                'flow': session.get('flow', 'unknown'),
+                'name': session.get('name', 'Not provided'),
+                'tour_type': session.get('tour_type', 'Not selected'),
+                'timestamp': datetime.datetime.now().isoformat()
+            }
+        
+        return jsonify({
+            "total_active_sessions": len(active_sessions),
+            "sessions": active_sessions
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting active sessions: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint"""
@@ -1185,7 +1305,7 @@ def health():
         "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
         "sheets_available": sheet is not None,
         "active_sessions": len(booking_sessions),
-        "version": "6.0 - Adults/Children Count & Direct Menu"
+        "version": "7.0 - Admin Chat Intervention"
     }
     return jsonify(status)
 
