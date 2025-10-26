@@ -1,1318 +1,1560 @@
-from flask import Flask, request, jsonify
-import datetime
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import os
-import json
-import requests
-import logging
-import time
-import re
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-app = Flask(__name__)
-
-# ==============================
-# CONFIGURATION - AL BAHR SEA TOURS
-# ==============================
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "ALBAHRB0T")
-WHATSAPP_TOKEN = os.environ.get("ACCESS_TOKEN")
-SHEET_NAME = os.environ.get("SHEET_NAME", "Al Bahr Bot Leads")
-WHATSAPP_PHONE_ID = os.environ.get("PHONE_NUMBER_ID", "797371456799734")
-
-# Validate required environment variables
-missing_vars = []
-if not WHATSAPP_TOKEN:
-    missing_vars.append("ACCESS_TOKEN")
-if not WHATSAPP_PHONE_ID:
-    missing_vars.append("PHONE_NUMBER_ID")
-if not os.environ.get("GOOGLE_CREDS_JSON"):
-    missing_vars.append("GOOGLE_CREDS_JSON")
-
-if missing_vars:
-    logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
-
-# Google Sheets setup
-try:
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds_dict = json.loads(os.environ["GOOGLE_CREDS_JSON"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open(SHEET_NAME).sheet1
-    
-    # Ensure the sheet has the right columns
-    try:
-        current_headers = sheet.row_values(1)
-        required_headers = ['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests']
-        if current_headers != required_headers:
-            sheet.clear()
-            sheet.append_row(required_headers)
-            logger.info("✅ Updated Google Sheets headers")
-    except:
-        # If sheet is empty, add headers
-        sheet.append_row(['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests'])
-    
-    logger.info("✅ Google Sheets initialized successfully")
-except Exception as e:
-    logger.error(f"❌ Google Sheets initialization failed: {str(e)}")
-    sheet = None
-
-# Simple session management
-booking_sessions = {}
-
-# ==============================
-# HELPER FUNCTIONS
-# ==============================
-
-def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", adults_count="0", children_count="0", total_guests="0"):
-    """Add user entry to Google Sheet"""
-    try:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, adults_count, children_count, total_guests])
-        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}, Adults: {adults_count}, Children: {children_count}")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to add lead to sheet: {str(e)}")
-        return False
-
-def send_whatsapp_message(to, message, interactive_data=None):
-    """Send WhatsApp message via Meta API"""
-    try:
-        # Clean the phone number
-        clean_to = clean_oman_number(to)
-        if not clean_to:
-            logger.error(f"❌ Invalid phone number: {to}")
-            return False
-        
-        url = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_ID}/messages"
-        headers = {
-            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-            "Content-Type": "application/json"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Al Bahr Sea Tours - Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root {
+            --primary: #0369a1;
+            --primary-dark: #0c4a6e;
+            --secondary: #0e7490;
+            --accent: #06b6d4;
         }
         
-        if interactive_data:
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": clean_to,
-                "type": "interactive",
-                "interactive": interactive_data
-            }
-        else:
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": clean_to,
-                "type": "text",
-                "text": {
-                    "body": message
-                }
-            }
-
-        logger.info(f"📤 Sending WhatsApp message to {clean_to}")
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response_data = response.json()
-        
-        if response.status_code == 200:
-            logger.info(f"✅ WhatsApp message sent successfully to {clean_to}")
-            return True
-        else:
-            error_message = response_data.get('error', {}).get('message', 'Unknown error')
-            logger.error(f"❌ WhatsApp API error {response.status_code}: {error_message}")
-            return False
-        
-    except Exception as e:
-        logger.error(f"🚨 Failed to send WhatsApp message: {str(e)}")
-        return False
-
-def clean_oman_number(number):
-    """Clean and validate Oman phone numbers"""
-    if not number:
-        return None
-    
-    # Remove all non-digit characters
-    clean_number = ''.join(filter(str.isdigit, str(number)))
-    
-    if not clean_number:
-        return None
-        
-    # Handle Oman numbers specifically
-    if len(clean_number) == 8 and clean_number.startswith(('9', '7', '8')):
-        # Local Oman number (9xxxxxxx, 7xxxxxxx, or 8xxxxxxx)
-        return '968' + clean_number
-    elif len(clean_number) == 11 and clean_number.startswith('968'):
-        # Full Oman number with country code
-        return clean_number
-    elif len(clean_number) == 12 and clean_number.startswith('968'):
-        # Already in correct format
-        return clean_number
-    
-    return None
-
-def send_welcome_message(to):
-    """Send initial welcome message with direct tour list"""
-    send_main_options_list(to)
-
-def send_main_options_list(to):
-    """Send ALL options in one list - This is now the main menu"""
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🌊 Al Bahr Sea Tours"
-        },
-        "body": {
-            "text": "Welcome to Oman's premier sea adventure company! 🚤\n\nChoose your sea adventure: 🗺️"
-        },
-        "action": {
-            "button": "🌊 View Tours",
-            "sections": [
-                {
-                    "title": "🚤 Popular Tours",
-                    "rows": [
-                        {
-                            "id": "dolphin_tour",
-                            "title": "🐬 Dolphin Watching",
-                            "description": "Swim with dolphins in their natural habitat"
-                        },
-                        {
-                            "id": "snorkeling", 
-                            "title": "🤿 Snorkeling",
-                            "description": "Explore vibrant coral reefs and marine life"
-                        },
-                        {
-                            "id": "dhow_cruise",
-                            "title": "⛵ Dhow Cruise", 
-                            "description": "Traditional Omani boat sunset experience"
-                        },
-                        {
-                            "id": "fishing",
-                            "title": "🎣 Fishing Trip",
-                            "description": "Deep sea fishing adventure"
-                        }
-                    ]
-                },
-                {
-                    "title": "ℹ️ Information & Booking",
-                    "rows": [
-                        {
-                            "id": "pricing",
-                            "title": "💰 Pricing",
-                            "description": "Tour prices and packages"
-                        },
-                        {
-                            "id": "location",
-                            "title": "📍 Location",
-                            "description": "Our marina address and directions"
-                        },
-                        {
-                            "id": "schedule",
-                            "title": "🕒 Schedule",
-                            "description": "Tour timings and availability"
-                        },
-                        {
-                            "id": "contact",
-                            "title": "📞 Contact",
-                            "description": "Get in touch with our team"
-                        },
-                        {
-                            "id": "book_now",
-                            "title": "📅 Book Now", 
-                            "description": "Reserve your sea adventure"
-                        }
-                    ]
-                }
-            ]
+        body { 
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            font-family: 'Inter', sans-serif;
         }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
-
-def start_booking_flow(to):
-    """Start the booking flow by asking for name"""
-    # Clear any existing session
-    if to in booking_sessions:
-        del booking_sessions[to]
-    
-    # Create new session
-    booking_sessions[to] = {
-        'step': 'awaiting_name',
-        'flow': 'booking'
-    }
-    
-    send_whatsapp_message(to, 
-        "📝 *Let's Book Your Tour!* 🎫\n\n"
-        "I'll help you book your sea adventure. 🌊\n\n"
-        "First, please send me your:\n\n"
-        "👤 *Full Name*\n\n"
-        "*Example:*\n"
-        "Ahmed Al Harthy")
-
-def ask_for_contact(to, name):
-    """Ask for contact after getting name"""
-    # Update session with name
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_contact',
-            'name': name
-        })
-    
-    send_whatsapp_message(to, 
-        f"Perfect, {name}! 👋\n\n"
-        "Now please send me your:\n\n"
-        "📞 *Phone Number*\n\n"
-        "*Example:*\n"
-        "91234567")
-
-def ask_for_tour_type(to, name, contact):
-    """Ask for tour type using interactive list"""
-    # Update session with contact
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_tour_type',
-            'name': name,
-            'contact': contact
-        })
-    
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🚤 Choose Your Tour"
-        },
-        "body": {
-            "text": f"Great {name}! Which tour would you like to book?"
-        },
-        "action": {
-            "button": "Select Tour",
-            "sections": [
-                {
-                    "title": "Available Tours",
-                    "rows": [
-                        {
-                            "id": f"book_dolphin|{name}|{contact}",
-                            "title": "🐬 Dolphin Watching",
-                            "description": "2 hours • 25 OMR per person"
-                        },
-                        {
-                            "id": f"book_snorkeling|{name}|{contact}", 
-                            "title": "🤿 Snorkeling",
-                            "description": "3 hours • 35 OMR per person"
-                        },
-                        {
-                            "id": f"book_dhow|{name}|{contact}",
-                            "title": "⛵ Dhow Cruise", 
-                            "description": "2 hours • 40 OMR per person"
-                        },
-                        {
-                            "id": f"book_fishing|{name}|{contact}",
-                            "title": "🎣 Fishing Trip",
-                            "description": "4 hours • 50 OMR per person"
-                        }
-                    ]
-                }
-            ]
+        
+        .sidebar { 
+            transition: all 0.3s ease;
+            background: linear-gradient(180deg, var(--primary-dark) 0%, var(--primary) 100%);
         }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
-
-def ask_for_adults_count(to, name, contact, tour_type):
-    """Ask for number of adults"""
-    # Update session with tour type
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_adults_count',
-            'name': name,
-            'contact': contact,
-            'tour_type': tour_type
-        })
-    
-    send_whatsapp_message(to,
-        f"👥 *Number of Adults*\n\n"
-        f"Great choice! {tour_type} it is! 🎯\n\n"
-        "How many *adults* (12 years and above) will be joining?\n\n"
-        "Please send the number:\n"
-        "*Examples:* 2, 4, 6")
-
-def ask_for_children_count(to, name, contact, tour_type, adults_count):
-    """Ask for number of children"""
-    # Update session with adults count
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_children_count',
-            'name': name,
-            'contact': contact,
-            'tour_type': tour_type,
-            'adults_count': adults_count
-        })
-    
-    send_whatsapp_message(to,
-        f"👶 *Number of Children*\n\n"
-        f"Adults: {adults_count}\n\n"
-        "How many *children* (below 12 years) will be joining?\n\n"
-        "Please send the number:\n"
-        "*Examples:* 0, 1, 2\n\n"
-        "If no children, just send: 0")
-
-def ask_for_date(to, name, contact, tour_type, adults_count, children_count):
-    """Ask for preferred date"""
-    # Calculate total guests
-    total_guests = int(adults_count) + int(children_count)
-    
-    # Update session with people counts
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_date',
-            'name': name,
-            'contact': contact,
-            'tour_type': tour_type,
-            'adults_count': adults_count,
-            'children_count': children_count,
-            'total_guests': total_guests
-        })
-    
-    send_whatsapp_message(to,
-        f"📅 *Preferred Date*\n\n"
-        f"Perfect! {total_guests} guests total:\n"
-        f"• {adults_count} adults\n"
-        f"• {children_count} children\n\n"
-        "Please send your *preferred date*:\n\n"
-        "📋 *Format Examples:*\n"
-        "• **Tomorrow**\n"
-        "• **October 29**\n" 
-        "• **Next Friday**\n"
-        "• **15 November**\n"
-        "• **2024-12-25**\n\n"
-        "We'll check availability for your chosen date! 📅")
-
-def ask_for_time(to, name, contact, tour_type, adults_count, children_count, booking_date):
-    """Ask for preferred time"""
-    total_guests = int(adults_count) + int(children_count)
-    
-    # Update session with date
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_time',
-            'name': name,
-            'contact': contact,
-            'tour_type': tour_type,
-            'adults_count': adults_count,
-            'children_count': children_count,
-            'total_guests': total_guests,
-            'booking_date': booking_date
-        })
-    
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🕒 Preferred Time"
-        },
-        "body": {
-            "text": f"Perfect! {booking_date} for {tour_type}.\n\n{total_guests} guests:\n• {adults_count} adults\n• {children_count} children\n\nChoose your preferred time:"
-        },
-        "action": {
-            "button": "Select Time",
-            "sections": [
-                {
-                    "title": "Morning Sessions",
-                    "rows": [
-                        {
-                            "id": f"time_8am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌅 8:00 AM",
-                            "description": "Early morning adventure"
-                        },
-                        {
-                            "id": f"time_9am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
-                            "title": "☀️ 9:00 AM",
-                            "description": "Morning session"
-                        },
-                        {
-                            "id": f"time_10am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌞 10:00 AM", 
-                            "description": "Late morning"
-                        }
-                    ]
-                },
-                {
-                    "title": "Afternoon Sessions",
-                    "rows": [
-                        {
-                            "id": f"time_2pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌇 2:00 PM",
-                            "description": "Afternoon adventure"
-                        },
-                        {
-                            "id": f"time_4pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌅 4:00 PM",
-                            "description": "Late afternoon"
-                        },
-                        {
-                            "id": f"time_6pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌆 6:00 PM",
-                            "description": "Evening session"
-                        }
-                    ]
-                }
-            ]
+        
+        .card-hover { 
+            transition: all 0.3s ease; 
         }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
-
-def complete_booking(to, name, contact, tour_type, adults_count, children_count, booking_date, booking_time):
-    """Complete the booking and save to sheet"""
-    total_guests = int(adults_count) + int(children_count)
-    
-    # Save to Google Sheets
-    success = add_lead_to_sheet(
-        name=name,
-        contact=contact,
-        intent="Book Tour",
-        whatsapp_id=to,
-        tour_type=tour_type,
-        booking_date=booking_date,
-        booking_time=booking_time,
-        adults_count=adults_count,
-        children_count=children_count,
-        total_guests=str(total_guests)
-    )
-    
-    # Clear the session
-    if to in booking_sessions:
-        del booking_sessions[to]
-    
-    # Send confirmation message
-    if success:
-        send_whatsapp_message(to,
-            f"🎉 *Booking Confirmed!* ✅\n\n"
-            f"Thank you {name}! Your tour has been booked successfully. 🐬\n\n"
-            f"📋 *Booking Details:*\n"
-            f"👤 Name: {name}\n"
-            f"📞 Contact: {contact}\n"
-            f"🚤 Tour: {tour_type}\n"
-            f"👥 Guests: {total_guests} total\n"
-            f"   • {adults_count} adults\n"
-            f"   • {children_count} children\n"
-            f"📅 Date: {booking_date}\n"
-            f"🕒 Time: {booking_time}\n\n"
-            f"💰 *Total: {calculate_price(tour_type, adults_count, children_count)} OMR*\n\n"
-            f"Our team will contact you within 1 hour to confirm details. ⏰\n"
-            f"For immediate assistance: +968 24 123456 📞\n\n"
-            f"Get ready for an amazing sea adventure! 🌊")
-    else:
-        send_whatsapp_message(to,
-            f"📝 *Booking Received!*\n\n"
-            f"Thank you {name}! We've received your booking request. 🐬\n\n"
-            f"📋 *Your Details:*\n"
-            f"👤 Name: {name}\n"
-            f"📞 Contact: {contact}\n"
-            f"🚤 Tour: {tour_type}\n"
-            f"👥 Guests: {total_guests} total\n"
-            f"   • {adults_count} adults\n"
-            f"   • {children_count} children\n"
-            f"📅 Date: {booking_date}\n"
-            f"🕒 Time: {booking_time}\n\n"
-            f"Our team will contact you within 1 hour to confirm. 📞")
-
-def calculate_price(tour_type, adults_count, children_count):
-    """Calculate tour price based on type and people count"""
-    prices = {
-        "Dolphin Watching": 25,
-        "Snorkeling": 35,
-        "Dhow Cruise": 40,
-        "Fishing Trip": 50
-    }
-    
-    base_price = prices.get(tour_type, 30)
-    adults = int(adults_count)
-    children = int(children_count)
-    
-    # Children under 12 get 50% discount
-    adult_total = adults * base_price
-    children_total = children * (base_price * 0.5)  # 50% discount for children
-    
-    total_price = adult_total + children_total
-    
-    # Apply group discount for 4+ total guests
-    if (adults + children) >= 4:
-        total_price = total_price * 0.9  # 10% discount
-    
-    return f"{total_price:.2f}"
-
-def handle_keyword_questions(text, phone_number):
-    """Handle direct keyword questions without menu"""
-    text_lower = text.lower()
-    
-    # Location questions
-    if any(word in text_lower for word in ['where', 'location', 'address', 'located', 'map']):
-        response = """📍 *Our Location:* 🌊
-
-🏖️ *Al Bahr Sea Tours*
-Marina Bandar Al Rowdha
-Muscat, Oman
-
-🗺️ *Google Maps:* 
-https://maps.app.goo.gl/albahrseatours
-
-🚗 *Parking:* Available at marina
-⏰ *Opening Hours:* 7:00 AM - 7:00 PM Daily
-
-We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
-        send_whatsapp_message(phone_number, response)
-        return True
-    
-    # Price questions
-    elif any(word in text_lower for word in ['price', 'cost', 'how much', 'fee', 'charge']):
-        response = """💰 *Tour Prices & Packages:* 💵
-
-🐬 *Dolphin Watching Tour:*
-• 2 hours • 25 OMR per adult
-• Children under 12: 50% discount
-• Includes: Guide, safety equipment, refreshments
-
-🤿 *Snorkeling Adventure:*
-• 3 hours • 35 OMR per adult
-• Children under 12: 50% discount  
-• Includes: Equipment, guide, snacks & drinks
-
-⛵ *Sunset Dhow Cruise:*
-• 2 hours • 40 OMR per adult
-• Children under 12: 50% discount
-• Includes: Traditional Omani dinner, drinks
-
-🎣 *Fishing Trip:*
-• 4 hours • 50 OMR per adult
-• Children under 12: 50% discount
-• Includes: Fishing gear, bait, refreshments
-
-👨‍👩‍👧‍👦 *Special Offers:*
-• Group of 4+ people: 10% discount
-• Family packages available!"""
-        send_whatsapp_message(phone_number, response)
-        return True
-    
-    # Timing questions
-    elif any(word in text_lower for word in ['time', 'schedule', 'hour', 'when', 'available']):
-        response = """🕒 *Tour Schedule & Timings:* ⏰
-
-*Daily Tour Departures:*
-🌅 *Morning Sessions:*
-• Dolphin Watching: 8:00 AM, 10:00 AM
-• Snorkeling: 9:00 AM, 11:00 AM
-
-🌇 *Afternoon Sessions:*
-• Fishing Trips: 2:00 PM
-• Dhow Cruises: 4:00 PM, 6:00 PM
-
-📅 *Advanced booking recommended!*"""
-        send_whatsapp_message(phone_number, response)
-        return True
-    
-    # Contact questions
-    elif any(word in text_lower for word in ['contact', 'phone', 'call', 'number', 'whatsapp']):
-        response = """📞 *Contact Al Bahr Sea Tours:* 📱
-
-*Phone:* +968 24 123456
-*WhatsApp:* +968 9123 4567
-*Email:* info@albahrseatours.com
-
-🌐 *Website:* www.albahrseatours.com
-
-⏰ *Customer Service Hours:*
-7:00 AM - 7:00 PM Daily
-
-📍 *Visit Us:*
-Marina Bandar Al Rowdha, Muscat"""
-        send_whatsapp_message(phone_number, response)
-        return True
-    
-    return False
-
-def handle_interaction(interaction_id, phone_number):
-    """Handle list and button interactions"""
-    logger.info(f"Handling interaction: {interaction_id} for {phone_number}")
-    
-    # Check if it's a booking flow interaction
-    if '|' in interaction_id:
-        parts = interaction_id.split('|')
-        action = parts[0]
         
-        if action.startswith('book_') and len(parts) >= 3:
-            # Tour type selection
-            tour_type_map = {
-                'book_dolphin': 'Dolphin Watching',
-                'book_snorkeling': 'Snorkeling',
-                'book_dhow': 'Dhow Cruise',
-                'book_fishing': 'Fishing Trip'
-            }
-            
-            tour_type = tour_type_map.get(action)
-            name = parts[1]
-            contact = parts[2]
-            
-            ask_for_adults_count(phone_number, name, contact, tour_type)
-            return True
-            
-        elif action.startswith('time_') and len(parts) >= 7:
-            # Time selection - complete booking
-            time_map = {
-                'time_8am': '8:00 AM',
-                'time_9am': '9:00 AM',
-                'time_10am': '10:00 AM',
-                'time_2pm': '2:00 PM',
-                'time_4pm': '4:00 PM',
-                'time_6pm': '6:00 PM'
-            }
-            
-            booking_time = time_map.get(action, 'Not specified')
-            name = parts[1]
-            contact = parts[2]
-            tour_type = parts[3]
-            adults_count = parts[4]
-            children_count = parts[5]
-            booking_date = parts[6]
-            
-            complete_booking(phone_number, name, contact, tour_type, adults_count, children_count, booking_date, booking_time)
-            return True
-    
-    # Regular menu interactions
-    responses = {
-        # Welcome button - now directly sends main list
-        "view_options": lambda: send_main_options_list(phone_number),
-        
-        # Tour options
-        "dolphin_tour": """🐬 *Dolphin Watching Tour* 🌊
-
-*Experience the magic of swimming with wild dolphins!* 
-
-📅 *Duration:* 2 hours
-💰 *Price:* 25 OMR per adult (50% off for children)
-👥 *Group size:* Small groups (max 8 people)
-
-*What's included:*
-• Expert marine guide 🧭
-• Safety equipment & life jackets 🦺
-• Refreshments & bottled water 🥤
-• Photography opportunities 📸
-
-*Best time:* Morning tours (8AM, 10AM)
-*Success rate:* 95% dolphin sightings! 
-
-Ready to book? Select 'Book Now'! 📅""",
-
-        "snorkeling": """🤿 *Snorkeling Adventure* 🐠
-
-*Discover Oman's underwater paradise!* 
-
-📅 *Duration:* 3 hours
-💰 *Price:* 35 OMR per adult (50% off for children)
-👥 *Group size:* Small groups (max 6 people)
-
-*What's included:*
-• Full snorkeling equipment 🤿
-• Professional guide 🧭
-• Safety equipment 🦺
-• Snacks & refreshments 🍎🥤
-
-*What you'll see:*
-• Vibrant coral gardens 🌸
-• Tropical fish species 🐠
-• Sea turtles (if lucky!) 🐢
-• Crystal clear waters 💎
-
-Ready to explore? Select 'Book Now'! 🌊""",
-
-        "dhow_cruise": """⛵ *Traditional Dhow Cruise* 🌅
-
-*Sail into the sunset on a traditional Omani boat!*
-
-📅 *Duration:* 2 hours
-💰 *Price:* 40 OMR per adult (50% off for children)
-👥 *Group size:* Intimate groups (max 10 people)
-
-*What's included:*
-• Traditional Omani dhow cruise ⛵
-• Sunset views & photography 🌅
-• Omani dinner & refreshments 🍽️
-• Soft drinks & water 🥤
-
-*Departure times:* 4:00 PM, 6:00 PM
-*Perfect for:* Couples, families, special occasions 
-
-Ready to sail? Select 'Book Now'! ⛵""",
-
-        "fishing": """🎣 *Deep Sea Fishing Trip* 🐟
-
-*Experience the thrill of deep sea fishing!*
-
-📅 *Duration:* 4 hours
-💰 *Price:* 50 OMR per adult (50% off for children)
-👥 *Group size:* Small groups (max 4 people)
-
-*What's included:*
-• Professional fishing gear 🎣
-• Bait & tackle 🪱
-• Expert fishing guide 🧭
-• Refreshments & snacks 🥤🍎
-• Clean & prepare your catch 🐟
-
-*Suitable for:* Beginners to experienced
-*Includes:* Fishing license
-
-Ready to catch the big one? Select 'Book Now'! 🎣""",
-
-        # Information options
-        "pricing": """💰 *Tour Prices & Packages* 💵
-
-*All prices include safety equipment & guides*
-*Children under 12 get 50% discount!*
-
-🐬 *Dolphin Watching:* 25 OMR per adult
-• 2 hours • Small groups • Refreshments included
-
-🤿 *Snorkeling Adventure:* 35 OMR per adult  
-• 3 hours • Full equipment • Snacks & drinks
-
-⛵ *Dhow Cruise:* 40 OMR per adult
-• 2 hours • Traditional boat • Dinner included
-
-🎣 *Fishing Trip:* 50 OMR per adult
-• 4 hours • Professional gear • Refreshments
-
-👨‍👩‍👧‍👦 *Special Offers:*
-• Group of 4+ people: 10% discount
-• Family packages available
-
-Book your adventure today! 📅""",
-
-        "location": """📍 *Our Location & Directions* 🗺️
-
-🏖️ *Al Bahr Sea Tours*
-Marina Bandar Al Rowdha
-Muscat, Sultanate of Oman
-
-🗺️ *Google Maps:*
-https://maps.app.goo.gl/albahrseatours
-
-🚗 *How to reach us:*
-• From Muscat City Center: 15 minutes
-• From Seeb Airport: 25 minutes  
-• From Al Mouj: 10 minutes
-
-🅿️ *Parking:* Ample parking available at marina
-
-⏰ *Operating Hours:*
-7:00 AM - 7:00 PM Daily
-
-We're easy to find at Bandar Al Rowdha Marina! 🚤""",
-
-        "schedule": """🕒 *Tour Schedule & Availability* 📅
-
-*Daily Departure Times:*
-
-🌅 *Morning Adventures:*
-• 8:00 AM - Dolphin Watching 🐬
-• 9:00 AM - Snorkeling 🤿
-• 10:00 AM - Dolphin Watching 🐬
-• 11:00 AM - Snorkeling 🤿
-
-🌇 *Afternoon Experiences:*
-• 2:00 PM - Fishing Trip 🎣
-• 4:00 PM - Dhow Cruise ⛵
-• 5:00 PM - Sunset Dolphin 🐬
-
-🌅 *Evening Magic:*
-• 6:00 PM - Dhow Cruise ⛵
-• 6:30 PM - Sunset Cruise 🌅
-
-📅 *Advanced booking recommended*
-⏰ *Check-in:* 30 minutes before departure""",
-
-        "contact": """📞 *Contact Al Bahr Sea Tours* 📱
-
-*We're here to help you plan the perfect sea adventure!* 🌊
-
-📞 *Phone:* +968 24 123456
-📱 *WhatsApp:* +968 9123 4567
-📧 *Email:* info@albahrseatours.com
-
-🌐 *Website:* www.albahrseatours.com
-
-⏰ *Customer Service Hours:*
-7:00 AM - 7:00 PM Daily
-
-📍 *Visit Us:*
-Marina Bandar Al Rowdha
-Muscat, Oman""",
-
-        "book_now": lambda: start_booking_flow(phone_number)
-    }
-    
-    response = responses.get(interaction_id)
-    
-    if callable(response):
-        response()
-        return True
-    elif response:
-        send_whatsapp_message(phone_number, response)
-        return True
-    else:
-        send_whatsapp_message(phone_number, "Sorry, I didn't understand that option. Please select from the menu. 📋")
-        return False
-
-# ==============================
-# ADMIN CHAT INTERVENTION FUNCTIONS
-# ==============================
-
-def send_admin_message(phone_number, message):
-    """Send message as admin to specific user"""
-    try:
-        # Add admin identifier to the message
-        admin_message = f"💬 *Admin Support:*\n\n{message}\n\n— Al Bahr Sea Tours Team 🌊"
-        
-        success = send_whatsapp_message(phone_number, admin_message)
-        
-        if success:
-            # Log the admin intervention
-            logger.info(f"✅ Admin message sent to {phone_number}: {message}")
-            return True
-        else:
-            logger.error(f"❌ Failed to send admin message to {phone_number}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"🚨 Error sending admin message: {str(e)}")
-        return False
-
-def get_user_session(phone_number):
-    """Get current session state for a user"""
-    session = booking_sessions.get(phone_number)
-    if session:
-        return {
-            'has_session': True,
-            'step': session.get('step', 'unknown'),
-            'flow': session.get('flow', 'unknown'),
-            'name': session.get('name', 'Not provided'),
-            'contact': session.get('contact', 'Not provided'),
-            'tour_type': session.get('tour_type', 'Not selected'),
-            'adults_count': session.get('adults_count', '0'),
-            'children_count': session.get('children_count', '0'),
-            'total_guests': session.get('total_guests', '0'),
-            'booking_date': session.get('booking_date', 'Not selected')
+        .card-hover:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }
-    else:
-        return {'has_session': False}
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-left: 4px solid var(--primary);
+        }
+        
+        .nav-active {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .loading-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .wave-bg {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%230369a1' fill-opacity='0.1'%3E%3C/path%3E%3C/svg%3E");
+            background-size: cover;
+            background-position: bottom;
+        }
 
-# ==============================
-# CORS FIX - SIMPLE AND CLEAN
-# ==============================
+        .chat-message {
+            max-width: 80%;
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-radius: 18px;
+            position: relative;
+        }
 
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+        .admin-message {
+            background: #dcf8c6;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
 
-# ==============================
-# WEBHOOK ENDPOINTS
-# ==============================
+        .user-message {
+            background: #ffffff;
+            border: 1px solid #e5e5e5;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
 
-@app.route("/webhook", methods=["GET"])
-def verify():
-    """Webhook verification for Meta"""
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-    
-    if token == VERIFY_TOKEN:
-        logger.info("✅ Webhook verified successfully")
-        return challenge
-    else:
-        logger.warning("❌ Webhook verification failed: token mismatch")
-        return "Verification token mismatch", 403
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            background: #f8f9fa;
+        }
 
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    """Handle incoming WhatsApp messages and interactions"""
-    try:
-        data = request.get_json()
-        
-        # Extract message details
-        entry = data.get("entry", [{}])[0]
-        changes = entry.get("changes", [{}])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
-        
-        if not messages:
-            return jsonify({"status": "no_message"})
-            
-        message = messages[0]
-        phone_number = message["from"]
-        
-        # Check if it's an interactive message (list or button)
-        if "interactive" in message:
-            interactive_data = message["interactive"]
-            interactive_type = interactive_data["type"]
-            
-            if interactive_type == "list_reply":
-                list_reply = interactive_data["list_reply"]
-                option_id = list_reply["id"]
-                
-                logger.info(f"📋 List option selected: {option_id} by {phone_number}")
-                handle_interaction(option_id, phone_number)
-                return jsonify({"status": "list_handled"})
-            
-            elif interactive_type == "button_reply":
-                button_reply = interactive_data["button_reply"]
-                button_id = button_reply["id"]
-                
-                logger.info(f"🔘 Button clicked: {button_id} by {phone_number}")
-                
-                if button_id == "view_options":
-                    send_main_options_list(phone_number)
-                    return jsonify({"status": "view_options_sent"})
-                
-                handle_interaction(button_id, phone_number)
-                return jsonify({"status": "button_handled"})
-        
-        # Handle text messages
-        if "text" in message:
-            text = message["text"]["body"].strip()
-            logger.info(f"💬 Text message: '{text}' from {phone_number}")
-            
-            # Get current session
-            session = booking_sessions.get(phone_number)
-            
-            # First, check for keyword questions (unless in booking flow)
-            if not session and handle_keyword_questions(text, phone_number):
-                return jsonify({"status": "keyword_answered"})
-            
-            # Check for greeting
-            if not session and text.lower() in ["hi", "hello", "hey", "start", "menu"]:
-                send_welcome_message(phone_number)
-                return jsonify({"status": "welcome_sent"})
-            
-            # Handle booking flow - name input
-            if session and session.get('step') == 'awaiting_name':
-                ask_for_contact(phone_number, text)
-                return jsonify({"status": "name_received"})
-            
-            # Handle booking flow - contact input
-            elif session and session.get('step') == 'awaiting_contact':
-                name = session.get('name', '')
-                ask_for_tour_type(phone_number, name, text)
-                return jsonify({"status": "contact_received"})
-            
-            # Handle booking flow - adults count input
-            elif session and session.get('step') == 'awaiting_adults_count':
-                # Validate numeric input
-                if text.isdigit() and int(text) > 0:
-                    name = session.get('name', '')
-                    contact = session.get('contact', '')
-                    tour_type = session.get('tour_type', '')
-                    ask_for_children_count(phone_number, name, contact, tour_type, text)
-                    return jsonify({"status": "adults_count_received"})
-                else:
-                    send_whatsapp_message(phone_number, "Please enter a valid number of adults (e.g., 2, 4, 6)")
-                    return jsonify({"status": "invalid_adults_count"})
-            
-            # Handle booking flow - children count input
-            elif session and session.get('step') == 'awaiting_children_count':
-                # Validate numeric input
-                if text.isdigit() and int(text) >= 0:
-                    name = session.get('name', '')
-                    contact = session.get('contact', '')
-                    tour_type = session.get('tour_type', '')
-                    adults_count = session.get('adults_count', '')
-                    ask_for_date(phone_number, name, contact, tour_type, adults_count, text)
-                    return jsonify({"status": "children_count_received"})
-                else:
-                    send_whatsapp_message(phone_number, "Please enter a valid number of children (e.g., 0, 1, 2)")
-                    return jsonify({"status": "invalid_children_count"})
-            
-            # Handle booking flow - date input
-            elif session and session.get('step') == 'awaiting_date':
-                name = session.get('name', '')
-                contact = session.get('contact', '')
-                tour_type = session.get('tour_type', '')
-                adults_count = session.get('adults_count', '')
-                children_count = session.get('children_count', '')
-                
-                ask_for_time(phone_number, name, contact, tour_type, adults_count, children_count, text)
-                return jsonify({"status": "date_received"})
-            
-            # If no specific match, send welcome message
-            if not session:
-                send_welcome_message(phone_number)
-                return jsonify({"status": "fallback_welcome_sent"})
-        
-        return jsonify({"status": "unhandled_message_type"})
-        
-    except Exception as e:
-        logger.error(f"🚨 Error in webhook: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        .session-badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="fixed inset-0 bg-white z-50 flex items-center justify-center transition-opacity duration-300">
+        <div class="text-center">
+            <div class="w-16 h-16 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-gray-600 loading-pulse">Loading Al Bahr Dashboard...</p>
+        </div>
+    </div>
 
-# ==============================
-# DASHBOARD API ENDPOINTS
-# ==============================
+    <!-- Error Message -->
+    <div id="errorMessage" class="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg shadow-lg z-50 hidden">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <i data-feather="alert-triangle" class="w-5 h-5 mr-3"></i>
+                <div>
+                    <p class="font-medium" id="errorTitle">Connection Error</p>
+                    <p class="text-sm" id="errorText">Failed to load data from server</p>
+                </div>
+            </div>
+            <button onclick="hideError()" class="ml-4 text-red-500 hover:text-red-700">
+                <i data-feather="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </div>
 
-@app.route("/api/leads", methods=["GET"])
-def get_leads():
-    """Return all leads for dashboard"""
-    try:
-        if not sheet:
-            return jsonify({"error": "Google Sheets not configured"}), 500
-        
-        all_values = sheet.get_all_values()
-        
-        if not all_values or len(all_values) <= 1:
-            return jsonify([])
-        
-        headers = all_values[0]
-        valid_leads = []
-        
-        for row in all_values[1:]:
-            if not any(cell.strip() for cell in row):
-                continue
-                
-            processed_row = {}
-            for j, header in enumerate(headers):
-                value = row[j] if j < len(row) else ""
-                processed_row[header] = str(value).strip() if value else ""
-            
-            has_data = any([
-                processed_row.get('Name', ''),
-                processed_row.get('Contact', ''), 
-                processed_row.get('WhatsApp ID', ''),
-                processed_row.get('Intent', '')
-            ])
-            
-            if has_data:
-                valid_leads.append(processed_row)
-        
-        return jsonify(valid_leads)
-            
-    except Exception as e:
-        logger.error(f"Error in get_leads: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+    <!-- Success Message -->
+    <div id="successMessage" class="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-lg shadow-lg z-50 hidden">
+        <div class="flex items-center">
+            <i data-feather="check-circle" class="w-5 h-5 mr-3"></i>
+            <div>
+                <p class="font-medium" id="successTitle">Success</p>
+                <p class="text-sm" id="successText">Operation completed successfully</p>
+            </div>
+        </div>
+    </div>
 
-@app.route("/api/broadcast", methods=["POST", "OPTIONS"])
-def broadcast():
-    """Send broadcast messages with better data handling"""
-    if request.method == "OPTIONS":
-        return jsonify({"status": "ok"}), 200
-        
-    try:
-        data = request.get_json()
-        logger.info(f"📨 Received broadcast request")
-        
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
+    <!-- Chat Modal -->
+    <div id="chatModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-2xl h-[600px] flex flex-col">
+            <div class="flex justify-between items-center p-6 border-b">
+                <div>
+                    <h3 class="font-bold text-lg" id="chatUserName">Customer Chat</h3>
+                    <p class="text-sm text-gray-600" id="chatUserPhone">Loading...</p>
+                    <div class="flex items-center space-x-2 mt-1">
+                        <span class="text-xs text-gray-500">Session:</span>
+                        <span id="chatSessionStatus" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Checking...</span>
+                    </div>
+                </div>
+                <button id="closeChat" class="text-gray-500 hover:text-gray-700">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+            </div>
             
-        segment = data.get("segment", "all")
-        message = data.get("message", "").strip()
-        
-        if not message:
-            return jsonify({"error": "Message cannot be empty"}), 400
+            <div class="flex-1 p-4 overflow-hidden">
+                <div class="chat-container p-4" id="chatMessages">
+                    <div class="text-center text-gray-500 py-8">
+                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Loading conversation...</p>
+                    </div>
+                </div>
+            </div>
             
-        if not sheet:
-            return jsonify({"error": "Google Sheets not available"}), 500
-        
-        all_records = sheet.get_all_records()
-        logger.info(f"📊 Found {len(all_records)} total records")
-        
-        target_leads = []
-        
-        for row in all_records:
-            whatsapp_id = None
-            # Try multiple field names for WhatsApp ID
-            for field in ["WhatsApp ID", "WhatsAppID", "whatsapp_id", "WhatsApp", "Phone", "Contact", "Mobile"]:
-                if field in row and row[field]:
-                    whatsapp_id = str(row[field]).strip()
-                    if whatsapp_id and whatsapp_id.lower() not in ["pending", "none", "null", ""]:
-                        break
+            <div class="p-4 border-t">
+                <div class="flex space-x-3">
+                    <input type="text" id="chatMessageInput" placeholder="Type your message..." 
+                           class="flex-1 px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
+                    <button id="sendChatMessage" class="bg-blue-900 text-white px-6 py-3 rounded-xl hover:bg-opacity-90 transition-all">
+                        <i data-feather="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2">
+                    <button onclick="insertQuickMessage('Hello! How can I help you today?')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        Quick Help
+                    </button>
+                    <button onclick="insertQuickMessage('Can you please provide more details?')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        More Details
+                    </button>
+                    <button onclick="insertQuickMessage('Our team will contact you shortly.')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        Team Contact
+                    </button>
+                    <button onclick="insertQuickMessage('Thank you for your patience!')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200">
+                        Thank You
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="sidebar w-64 text-white flex flex-col shadow-xl">
+            <div class="p-6 flex items-center space-x-3 border-b border-white border-opacity-20">
+                <div class="p-2 rounded-lg gradient-bg">
+                    <i data-feather="anchor" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-lg">Al Bahr Sea Tours</span>
+                    <p class="text-xs text-blue-200">Muscat, Oman</p>
+                </div>
+            </div>
             
-            if not whatsapp_id:
-                continue
-                
-            clean_whatsapp_id = clean_oman_number(whatsapp_id)
-            if not clean_whatsapp_id:
-                continue
-                
-            # Extract intent
-            intent = ""
-            for field in ["Intent", "intent", "Status", "status"]:
-                if field in row and row[field]:
-                    intent = str(row[field]).strip()
-                    break
+            <nav class="flex-1 p-6 space-y-2">
+                <a href="#" id="dashboardLink" class="nav-active flex items-center space-x-3 p-3 rounded-xl bg-white bg-opacity-20 shadow-lg transition-all">
+                    <i data-feather="home" class="w-5 h-5"></i>
+                    <span class="font-medium">Dashboard</span>
+                </a>
+                <a href="#" id="leadsLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
+                    <i data-feather="users" class="w-5 h-5"></i>
+                    <span class="font-medium">Leads Management</span>
+                </a>
+                <a href="#" id="chatLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
+                    <i data-feather="message-circle" class="w-5 h-5"></i>
+                    <span class="font-medium">Live Chat</span>
+                </a>
+                <a href="#" id="broadcastLink" class="flex items-center space-x-3 p-3 rounded-xl hover:bg-white hover:bg-opacity-10 transition-all">
+                    <i data-feather="send" class="w-5 h-5"></i>
+                    <span class="font-medium">Broadcast</span>
+                </a>
+            </nav>
             
-            # Check segment filter
-            intent_lower = intent.lower() if intent else ""
-            
-            if segment == "all":
-                target_leads.append({
-                    "whatsapp_id": clean_whatsapp_id,
-                    "name": row.get('Name', '') or row.get('name', ''),
-                    "intent": intent
-                })
-            elif segment == "book_tour" and "book" in intent_lower:
-                target_leads.append({
-                    "whatsapp_id": clean_whatsapp_id,
-                    "name": row.get('Name', '') or row.get('name', ''),
-                    "intent": intent
-                })
-        
-        logger.info(f"🎯 Targeting {len(target_leads)} recipients for segment '{segment}'")
-        
-        if len(target_leads) == 0:
-            return jsonify({
-                "status": "no_recipients", 
-                "sent": 0,
-                "failed": 0,
-                "total_recipients": 0,
-                "message": "No valid recipients found for the selected segment."
-            })
-        
-        sent_count = 0
-        failed_count = 0
-        
-        for i, lead in enumerate(target_leads):
-            try:
-                if i > 0:
-                    time.sleep(2)  # Rate limiting
-                
-                # Personalize message
-                personalized_message = message
-                if lead["name"] and lead["name"] not in ["", "Pending", "Unknown", "None"]:
-                    personalized_message = f"Hello {lead['name']}! 👋\n\n{message}"
-                
-                logger.info(f"📤 Sending to {lead['whatsapp_id']} - {lead['name']}")
-                
-                success = send_whatsapp_message(lead["whatsapp_id"], personalized_message)
-                
-                if success:
-                    sent_count += 1
-                else:
-                    failed_count += 1
+            <div class="p-6 border-t border-white border-opacity-20">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                        <i data-feather="user" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium">Admin User</p>
+                        <p class="text-xs text-blue-200" id="connectionStatus">Connected</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 overflow-auto bg-gray-50">
+            <header class="bg-white shadow-sm p-6 flex justify-between items-center border-b wave-bg">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800" id="pageTitle">Dashboard Overview</h1>
+                    <p class="text-gray-600" id="pageSubtitle">Al Bahr Sea Tours - Muscat, Oman</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                        <i data-feather="clock" class="w-4 h-4"></i>
+                        <span id="currentTime">--:--:--</span>
+                    </div>
+                    <button id="refreshBtn" class="flex items-center space-x-2 bg-blue-900 text-white px-4 py-2 rounded-xl hover:bg-opacity-90 transition-all shadow-lg">
+                        <i data-feather="refresh-cw" class="w-4 h-4"></i>
+                        <span>Refresh Data</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Sections -->
+            <div class="p-6 space-y-6" id="content">
+                <!-- Dashboard Overview -->
+                <div id="dashboardSection">
+                    <!-- Analytics Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Total Leads</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="totalLeads">0</h3>
+                                    <p class="text-green-600 text-sm mt-1" id="leadsGrowth">+0 today</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-blue-100">
+                                    <i data-feather="users" class="w-6 h-6 text-blue-900"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Tour Bookings</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="bookTours">0</h3>
+                                    <p class="text-green-600 text-sm mt-1" id="bookPercentage">0%</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-green-100">
+                                    <i data-feather="check-circle" class="w-6 h-6 text-green-600"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Active Chats</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="activeChats">0</h3>
+                                    <p class="text-blue-600 text-sm mt-1" id="chatsGrowth">+0 active</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-purple-100">
+                                    <i data-feather="message-circle" class="w-6 h-6 text-purple-600"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stats-card rounded-2xl shadow-lg p-6 card-hover">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 text-sm font-medium">Today's Leads</p>
+                                    <h3 class="text-3xl font-bold text-gray-800 mt-2" id="todayLeads">0</h3>
+                                    <p class="text-blue-600 text-sm mt-1" id="todayGrowth">+0</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-blue-100">
+                                    <i data-feather="trending-up" class="w-6 h-6 text-blue-600"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="font-bold text-lg mb-4">Tour Type Distribution</h3>
+                            <div class="h-64 flex items-center justify-center" id="tourChartContainer">
+                                <canvas id="tourChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-lg p-6">
+                            <h3 class="font-bold text-lg mb-4">Lead Intent Distribution</h3>
+                            <div class="h-64 flex items-center justify-center" id="intentChartContainer">
+                                <canvas id="intentChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="bg-white rounded-2xl shadow-lg p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg">Recent Leads</h3>
+                            <button id="viewAllLeads" class="text-blue-900 hover:text-blue-700 text-sm font-medium">View All Leads</button>
+                        </div>
+                        <div class="space-y-4" id="recentLeads">
+                            <div class="text-center py-8 text-gray-500">
+                                <i data-feather="users" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                <p>No leads data available</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leads Management -->
+                <div class="bg-white rounded-2xl shadow-lg overflow-hidden" id="leadsSection" style="display:none;">
+                    <div class="p-6 flex justify-between items-center border-b">
+                        <div>
+                            <h3 class="font-bold text-lg">Leads Management</h3>
+                            <p class="text-gray-600 text-sm">Manage and track all tour inquiries and bookings</p>
+                        </div>
+                        <div class="flex space-x-3">
+                            <div class="relative">
+                                <input type="text" id="searchLeads" placeholder="Search leads..." class="pl-10 pr-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
+                                <i data-feather="search" class="w-4 h-4 absolute left-3 top-3 text-gray-400"></i>
+                            </div>
+                            <button id="exportPDF" class="flex items-center space-x-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-200 transition-all">
+                                <i data-feather="download" class="w-4 h-4"></i>
+                                <span>Export PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200" id="leadsTable">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tour Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Intent</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="leadsTableBody">
+                                <tr>
+                                    <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                                        <div class="flex items-center justify-center space-x-2">
+                                            <div class="w-4 h-4 border-2 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Loading leads from Google Sheets...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-4 border-t flex justify-between items-center bg-gray-50">
+                        <div class="text-sm text-gray-600" id="leadsPaginationInfo">Showing 0 of 0 leads</div>
+                        <div class="flex space-x-2" id="leadsPagination"></div>
+                    </div>
+                </div>
+
+                <!-- Live Chat Section -->
+                <div class="bg-white rounded-2xl shadow-lg p-6" id="chatSection" style="display:none;">
+                    <h3 class="font-bold text-lg mb-2">Live Chat Management</h3>
+                    <p class="text-gray-600 mb-6">Monitor and interact with active customer conversations</p>
                     
-            except Exception as e:
-                failed_count += 1
-                logger.error(f"Error sending to {lead['whatsapp_id']}: {str(e)}")
-        
-        result = {
-            "status": "broadcast_completed",
-            "sent": sent_count,
-            "failed": failed_count,
-            "total_recipients": len(target_leads),
-            "segment": segment,
-            "message": f"Broadcast completed: {sent_count} sent, {failed_count} failed"
-        }
-        
-        logger.info(f"📬 Broadcast result: {result}")
-        return jsonify(result)
-        
-    except Exception as e:
-        logger.error(f"Broadcast error: {str(e)}")
-        return jsonify({"error": f"Broadcast failed: {str(e)}"}), 500
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2">
+                            <div class="bg-gray-50 rounded-xl p-6">
+                                <h4 class="font-bold mb-4">Active Sessions</h4>
+                                <div id="activeSessionsList" class="space-y-3">
+                                    <div class="text-center py-8 text-gray-500">
+                                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                                        <p>No active chat sessions</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-50 rounded-xl p-6">
+                            <h4 class="font-bold mb-4">Chat Information</h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Active:</span>
+                                    <span class="font-medium" id="totalActiveChats">0</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">In Booking Flow:</span>
+                                    <span class="font-medium" id="bookingFlowChats">0</span>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Quick Actions:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Click "Chat" to join conversation</li>
+                                        <li>• Use quick message buttons</li>
+                                        <li>• Identify yourself as admin</li>
+                                        <li>• Check session status first</li>
+                                    </ul>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Best Practices:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Be prompt with responses</li>
+                                        <li>• Use customer's name</li>
+                                        <li>• Check booking progress</li>
+                                        <li>• Follow up if needed</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-# ==============================
-# ADMIN CHAT INTERVENTION ENDPOINTS
-# ==============================
+                <!-- Broadcast Section -->
+                <div class="bg-white rounded-2xl shadow-lg p-6" id="broadcastSection" style="display:none;">
+                    <h3 class="font-bold text-lg mb-2">Broadcast Messages</h3>
+                    <p class="text-gray-600 mb-6">Send messages to different segments of your audience</p>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Select Segment</label>
+                                    <select id="segmentSelect" class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900">
+                                        <option value="all">All Leads</option>
+                                        <option value="book_tour">Tour Bookings</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Recipients</label>
+                                    <div class="px-4 py-3 border rounded-xl bg-gray-50">
+                                        <span class="font-medium text-blue-900" id="recipientCount">0</span> users will receive this message
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-gray-700 mb-2 font-medium">Message Content</label>
+                                <textarea id="broadcastMessage" class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-900" rows="6" placeholder="Type your broadcast message here..."></textarea>
+                                <div class="flex justify-between items-center mt-2">
+                                    <span class="text-sm text-gray-500" id="charCount">0 characters</span>
+                                    <span class="text-sm text-gray-500">WhatsApp formatting supported</span>
+                                </div>
+                            </div>
 
-@app.route("/api/send_message", methods=["POST", "OPTIONS"])
-def send_admin_message_endpoint():
-    """Send message as admin to specific user"""
-    if request.method == "OPTIONS":
-        return jsonify({"status": "ok"}), 200
-        
-    try:
-        data = request.get_json()
-        phone_number = data.get("phone_number")
-        message = data.get("message")
-        
-        if not phone_number or not message:
-            return jsonify({"error": "Phone number and message required"}), 400
-        
-        # Clean the phone number
-        clean_phone = clean_oman_number(phone_number)
-        if not clean_phone:
-            return jsonify({"error": "Invalid phone number format"}), 400
-        
-        success = send_admin_message(clean_phone, message)
-        
-        if success:
-            return jsonify({
-                "status": "message_sent",
-                "message": "Admin message sent successfully",
-                "phone_number": clean_phone
-            })
-        else:
-            return jsonify({"error": "Failed to send message"}), 500
-            
-    except Exception as e:
-        logger.error(f"Error in send_admin_message: {str(e)}")
-        return jsonify({"error": f"Failed to send message: {str(e)}"}), 500
+                            <!-- Sample Messages -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                <h4 class="font-bold text-blue-800 mb-2">Sample Messages</h4>
+                                <div class="space-y-2">
+                                    <button onclick="loadSampleMessage('special_offer')" class="w-full text-left p-3 bg-white rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+                                        <span class="font-medium text-blue-700">Special Offers</span>
+                                        <p class="text-sm text-blue-600 mt-1">Promotions and discounts</p>
+                                    </button>
+                                    <button onclick="loadSampleMessage('new_tours')" class="w-full text-left p-3 bg-white rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors">
+                                        <span class="font-medium text-blue-700">New Tours</span>
+                                        <p class="text-sm text-blue-600 mt-1">Announce new tour packages</p>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-4">
+                                <button id="previewBroadcast" class="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-xl font-medium hover:bg-gray-200 transition-all">
+                                    Preview Message
+                                </button>
+                                <button id="sendBroadcastBtn" class="flex-1 gradient-bg text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-all shadow-lg">
+                                    Send Broadcast Message
+                                </button>
+                            </div>
 
-@app.route("/api/user_session/<phone_number>", methods=["GET"])
-def get_user_session_endpoint(phone_number):
-    """Get current session state for a user"""
-    try:
-        # Clean the phone number
-        clean_phone = clean_oman_number(phone_number)
-        if not clean_phone:
-            return jsonify({"error": "Invalid phone number format"}), 400
-        
-        session_info = get_user_session(clean_phone)
-        return jsonify(session_info)
-        
-    except Exception as e:
-        logger.error(f"Error getting user session: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+                            <!-- Broadcast Progress -->
+                            <div id="broadcastProgress" class="hidden">
+                                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-sm font-medium text-blue-700">Sending messages...</span>
+                                        <span id="progressText" class="text-sm text-blue-600">0%</span>
+                                    </div>
+                                    <div class="w-full bg-blue-200 rounded-full h-2">
+                                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                    <div id="progressDetails" class="text-xs text-blue-600 mt-2"></div>
+                                </div>
+                            </div>
 
-@app.route("/api/active_sessions", methods=["GET"])
-def get_active_sessions():
-    """Get all active booking sessions"""
-    try:
-        active_sessions = {}
-        for phone, session in booking_sessions.items():
-            active_sessions[phone] = {
-                'step': session.get('step', 'unknown'),
-                'flow': session.get('flow', 'unknown'),
-                'name': session.get('name', 'Not provided'),
-                'tour_type': session.get('tour_type', 'Not selected'),
-                'timestamp': datetime.datetime.now().isoformat()
+                            <!-- Broadcast Results -->
+                            <div id="broadcastResults" class="hidden">
+                                <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+                                    <h4 class="font-medium text-green-800 mb-2">Broadcast Completed</h4>
+                                    <div id="resultsContent" class="text-sm text-green-700"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 rounded-xl p-6">
+                            <h4 class="font-bold mb-4">Broadcast Information</h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Selected Segment:</span>
+                                    <span class="font-medium" id="segmentInfo">All Leads</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Recipients:</span>
+                                    <span class="font-medium" id="recipientCountInfo">0</span>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Message Tips:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Use *bold* for emphasis</li>
+                                        <li>• Keep messages personal</li>
+                                        <li>• Include clear call-to-action</li>
+                                        <li>• Test with small group first</li>
+                                        <li>• Avoid spammy content</li>
+                                    </ul>
+                                </div>
+                                <div class="pt-4 border-t">
+                                    <p class="text-sm text-gray-600 mb-2">Best Practices:</p>
+                                    <ul class="text-sm text-gray-600 space-y-1">
+                                        <li>• Send during business hours</li>
+                                        <li>• Personalize with names</li>
+                                        <li>• Follow up after 24 hours</li>
+                                        <li>• Track engagement rates</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg">Message Preview</h3>
+                <button id="closePreview" class="text-gray-500 hover:text-gray-700">
+                    <i data-feather="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="bg-gray-100 rounded-lg p-4 mb-4">
+                <p id="previewContent" class="text-gray-800 whitespace-pre-wrap"></p>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancelSend" class="flex-1 bg-gray-300 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button id="confirmSend" class="flex-1 bg-blue-900 text-white py-3 rounded-xl font-medium hover:bg-opacity-90">
+                    Confirm & Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            API_BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                ? 'http://localhost:5000' 
+                : 'https://al-bahr-sea-tours-chatbot.onrender.com',
+            REFRESH_INTERVAL: 30000,
+            ITEMS_PER_PAGE: 10,
+            CHAT_POLL_INTERVAL: 5000 // Poll for new messages every 5 seconds
+        };
+
+        // State Management
+        let appState = {
+            leads: [],
+            filteredLeads: [],
+            currentPage: 1,
+            sortField: 'timestamp',
+            sortDirection: 'desc',
+            searchQuery: '',
+            charts: {},
+            broadcastInProgress: false,
+            activeSessions: {},
+            currentChatUser: null,
+            chatPollInterval: null,
+            currentChatHistory: []
+        };
+
+        // Initialize Application
+        async function initApp() {
+            showLoading();
+            try {
+                await loadAllData();
+                setupEventListeners();
+                startAutoRefresh();
+                updateCurrentTime();
+                hideLoading();
+            } catch (error) {
+                console.error('Initialization error:', error);
+                hideLoading();
+                showError('Initialization Failed', 'Could not load dashboard data');
             }
-        
-        return jsonify({
-            "total_active_sessions": len(active_sessions),
-            "sessions": active_sessions
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting active sessions: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        }
 
-@app.route("/api/health", methods=["GET"])
-def health():
-    """Health check endpoint"""
-    status = {
-        "status": "Al Bahr Sea Tours WhatsApp API Active 🌊",
-        "timestamp": str(datetime.datetime.now()),
-        "whatsapp_configured": bool(WHATSAPP_TOKEN and WHATSAPP_PHONE_ID),
-        "sheets_available": sheet is not None,
-        "active_sessions": len(booking_sessions),
-        "version": "7.0 - Admin Chat Intervention"
-    }
-    return jsonify(status)
+        // Core Data Functions
+        async function loadAllData() {
+            try {
+                const [leadsResponse, sessionsResponse] = await Promise.all([
+                    fetch(CONFIG.API_BASE_URL + '/api/leads').catch(error => {
+                        throw new Error(`Failed to fetch leads: ${error.message}`);
+                    }),
+                    fetch(CONFIG.API_BASE_URL + '/api/active_sessions').catch(error => {
+                        console.warn('Could not fetch active sessions:', error);
+                        return { ok: true, json: () => Promise.resolve({ sessions: {} }) };
+                    })
+                ]);
+                
+                if (!leadsResponse.ok) {
+                    throw new Error(`HTTP error! status: ${leadsResponse.status}`);
+                }
+                
+                const leads = await leadsResponse.json();
+                const sessions = await sessionsResponse.json();
+                
+                appState.leads = Array.isArray(leads) ? leads.map(lead => ({
+                    ...lead,
+                    timestamp: lead.Timestamp || '',
+                    name: lead.Name || '',
+                    contact: lead.Contact || '',
+                    whatsappId: lead['WhatsApp ID'] || '',
+                    intent: lead.Intent || '',
+                    tourType: lead['Tour Type'] || 'Not specified'
+                })) : [];
+                
+                appState.filteredLeads = [...appState.leads];
+                appState.activeSessions = sessions.sessions || {};
+                
+                updateDashboard();
+                updateLeadsTable();
+                updateCharts();
+                updateActiveSessions();
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showError('Connection Failed', `Cannot connect to server: ${error.message}`);
+            }
+        }
 
-# ==============================
-# RUN APPLICATION
-# ==============================
+        // Chat Functions - UPDATED FOR TWO-WAY CHAT
+        async function openChat(phoneNumber, name = 'Customer') {
+            try {
+                appState.currentChatUser = { phoneNumber, name };
+                
+                // Get user session info
+                const sessionResponse = await fetch(`${CONFIG.API_BASE_URL}/api/user_session/${phoneNumber}`);
+                const sessionInfo = await sessionResponse.json();
+                
+                document.getElementById('chatUserName').textContent = name || 'Customer';
+                document.getElementById('chatUserPhone').textContent = phoneNumber;
+                
+                // Update session status
+                const statusElement = document.getElementById('chatSessionStatus');
+                if (sessionInfo.has_session) {
+                    statusElement.textContent = `${sessionInfo.step.replace('awaiting_', '')} - ${sessionInfo.flow}`;
+                    statusElement.className = 'text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full';
+                } else {
+                    statusElement.textContent = 'No active session';
+                    statusElement.className = 'text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full';
+                }
+                
+                // Load chat history
+                await loadChatHistory(phoneNumber);
+                
+                document.getElementById('chatModal').classList.remove('hidden');
+                feather.replace();
+                
+                // Start polling for new messages
+                startChatPolling(phoneNumber);
+                
+            } catch (error) {
+                console.error('Error opening chat:', error);
+                showError('Chat Error', 'Failed to open chat session');
+            }
+        }
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+        async function loadChatHistory(phoneNumber) {
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}/api/user_messages/${phoneNumber}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    appState.currentChatHistory = data.messages || [];
+                    renderChatMessages();
+                } else {
+                    throw new Error(data.error || 'Failed to load chat history');
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+                appState.currentChatHistory = [];
+                renderChatMessages();
+            }
+        }
+
+        function renderChatMessages() {
+            const chatMessages = document.getElementById('chatMessages');
+            
+            if (appState.currentChatHistory.length === 0) {
+                chatMessages.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No messages yet. Start the conversation!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            chatMessages.innerHTML = appState.currentChatHistory.map(msg => `
+                <div class="chat-message ${msg.sender === 'admin' ? 'admin-message' : 'user-message'}">
+                    <div class="text-sm">${msg.message}</div>
+                    <div class="text-xs text-gray-500 mt-1 text-right">
+                        ${new Date(msg.timestamp).toLocaleTimeString()} • ${msg.sender === 'admin' ? 'You' : 'Customer'}
+                    </div>
+                </div>
+            `).join('');
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            feather.replace();
+        }
+
+        async function sendChatMessage() {
+            const messageInput = document.getElementById('chatMessageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message || !appState.currentChatUser) {
+                return;
+            }
+            
+            try {
+                // Add message to chat UI immediately
+                const tempMessage = {
+                    message: message,
+                    sender: 'admin',
+                    timestamp: new Date().toISOString()
+                };
+                appState.currentChatHistory.push(tempMessage);
+                renderChatMessages();
+                
+                messageInput.value = '';
+                
+                // Send to backend
+                const response = await fetch(CONFIG.API_BASE_URL + '/api/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        phone_number: appState.currentChatUser.phoneNumber,
+                        message: message
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to send message');
+                }
+                
+            } catch (error) {
+                console.error('Error sending message:', error);
+                showError('Send Failed', error.message);
+            }
+        }
+
+        function startChatPolling(phoneNumber) {
+            // Clear any existing polling
+            if (appState.chatPollInterval) {
+                clearInterval(appState.chatPollInterval);
+            }
+            
+            // Poll for new messages
+            appState.chatPollInterval = setInterval(async () => {
+                if (appState.currentChatUser && appState.currentChatUser.phoneNumber === phoneNumber) {
+                    await loadChatHistory(phoneNumber);
+                }
+            }, CONFIG.CHAT_POLL_INTERVAL);
+        }
+
+        function stopChatPolling() {
+            if (appState.chatPollInterval) {
+                clearInterval(appState.chatPollInterval);
+                appState.chatPollInterval = null;
+            }
+        }
+
+        function insertQuickMessage(message) {
+            document.getElementById('chatMessageInput').value = message;
+        }
+
+        function closeChat() {
+            stopChatPolling();
+            document.getElementById('chatModal').classList.add('hidden');
+            appState.currentChatUser = null;
+            appState.currentChatHistory = [];
+        }
+
+        // Update active sessions display
+        function updateActiveSessions() {
+            const sessionsList = document.getElementById('activeSessionsList');
+            const totalActive = document.getElementById('totalActiveChats');
+            const bookingFlow = document.getElementById('bookingFlowChats');
+            
+            const activeSessions = Object.keys(appState.activeSessions).length;
+            const bookingSessions = Object.values(appState.activeSessions).filter(s => s.flow === 'booking').length;
+            
+            totalActive.textContent = activeSessions;
+            bookingFlow.textContent = bookingSessions;
+            
+            if (activeSessions === 0) {
+                sessionsList.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-feather="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No active chat sessions</p>
+                    </div>
+                `;
+            } else {
+                sessionsList.innerHTML = Object.entries(appState.activeSessions).map(([phone, session]) => `
+                    <div class="bg-white rounded-lg p-4 border hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <p class="font-medium">${session.name || 'Unknown Customer'}</p>
+                                <p class="text-sm text-gray-600">${phone}</p>
+                            </div>
+                            <span class="session-badge ${session.flow === 'booking' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}">
+                                ${session.flow}
+                            </span>
+                        </div>
+                        <div class="text-sm text-gray-600 mb-3">
+                            <p>Step: <span class="font-medium">${session.step.replace('awaiting_', '')}</span></p>
+                            ${session.tour_type !== 'Not selected' ? `<p>Tour: <span class="font-medium">${session.tour_type}</span></p>` : ''}
+                        </div>
+                        <button onclick="openChat('${phone}', '${session.name || 'Customer'}')" 
+                                class="w-full bg-blue-900 text-white py-2 rounded-lg hover:bg-opacity-90 transition-all text-sm font-medium">
+                            <i data-feather="message-circle" class="w-4 h-4 inline mr-1"></i>
+                            Join Chat
+                        </button>
+                    </div>
+                `).join('');
+            }
+            
+            feather.replace();
+        }
+
+        // Update dashboard with chat stats
+        function updateDashboard() {
+            const leads = appState.leads;
+            const total = leads.length;
+            const bookTours = leads.filter(l => l.intent.toLowerCase().includes("book")).length;
+            const activeChats = Object.keys(appState.activeSessions).length;
+            
+            const today = new Date().toDateString();
+            const todayLeads = leads.filter(lead => {
+                const leadDate = new Date(lead.timestamp).toDateString();
+                return leadDate === today;
+            }).length;
+            
+            document.getElementById("totalLeads").textContent = total.toLocaleString();
+            document.getElementById("bookTours").textContent = bookTours.toLocaleString();
+            document.getElementById("activeChats").textContent = activeChats.toLocaleString();
+            document.getElementById("todayLeads").textContent = todayLeads.toLocaleString();
+            
+            const bookPercentage = total > 0 ? Math.round((bookTours / total) * 100) : 0;
+            
+            document.getElementById("bookPercentage").textContent = `${bookPercentage}%`;
+            document.getElementById("leadsGrowth").textContent = `+${todayLeads} today`;
+            document.getElementById("todayGrowth").textContent = `+${todayLeads}`;
+            document.getElementById("chatsGrowth").textContent = `+${activeChats} active`;
+            
+            updateRecentLeads();
+        }
+
+        function updateRecentLeads() {
+            const recentLeadsContainer = document.getElementById('recentLeads');
+            const recentLeads = appState.leads
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 5);
+            
+            if (recentLeads.length === 0) {
+                recentLeadsContainer.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i data-feather="users" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No leads data available</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            recentLeadsContainer.innerHTML = recentLeads.map(lead => `
+                <div class="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <i data-feather="user" class="w-5 h-5 text-blue-900"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-900">${lead.name || 'Unknown'}</p>
+                            <p class="text-sm text-gray-500">${lead.contact || 'No contact'} • ${lead.tourType}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                            lead.intent.toLowerCase().includes('book') 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                        }">
+                            ${lead.intent || 'Unknown'}
+                        </span>
+                        <p class="text-xs text-gray-500 mt-1">${formatDate(lead.timestamp)}</p>
+                    </div>
+                </div>
+            `).join('');
+            
+            feather.replace();
+        }
+
+        // Update leads table with chat buttons - REMOVED OFFLINE RESTRICTION
+        function updateLeadsTable() {
+            const tableBody = document.getElementById('leadsTableBody');
+            const paginationInfo = document.getElementById('leadsPaginationInfo');
+            const paginationContainer = document.getElementById('leadsPagination');
+            
+            if (appState.filteredLeads.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-gray-500">
+                            No leads found matching your search criteria.
+                        </td>
+                    </tr>
+                `;
+                paginationInfo.textContent = 'Showing 0 of 0 leads';
+                paginationContainer.innerHTML = '';
+                return;
+            }
+            
+            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
+            const startIndex = (appState.currentPage - 1) * CONFIG.ITEMS_PER_PAGE;
+            const endIndex = startIndex + CONFIG.ITEMS_PER_PAGE;
+            const currentLeads = appState.filteredLeads.slice(startIndex, endIndex);
+            
+            tableBody.innerHTML = currentLeads.map(lead => {
+                return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${formatDate(lead.timestamp)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        ${lead.name || 'Unknown'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.contact || 'No contact'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${lead.tourType}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            lead.intent.toLowerCase().includes('book') 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-gray-100 text-gray-800'
+                        }">
+                            ${lead.intent || 'Unknown'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <button onclick="openChat('${lead.whatsappId}', '${lead.name || 'Customer'}')" 
+                                class="flex items-center space-x-1 bg-blue-900 text-white px-3 py-1 rounded-lg hover:bg-opacity-90 transition-all text-xs font-medium">
+                            <i data-feather="message-circle" class="w-3 h-3"></i>
+                            <span>Chat</span>
+                        </button>
+                    </td>
+                </tr>
+            `}).join('');
+            
+            paginationInfo.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, appState.filteredLeads.length)} of ${appState.filteredLeads.length} leads`;
+            updatePaginationButtons(totalPages, paginationContainer);
+            feather.replace();
+        }
+
+        // Broadcast Functions - RESTORED
+        function updateRecipientCount() {
+            const segment = document.getElementById('segmentSelect').value;
+            let count = 0;
+            
+            switch(segment) {
+                case 'all':
+                    count = appState.leads.length;
+                    break;
+                case 'book_tour':
+                    count = appState.leads.filter(l => l.intent.toLowerCase().includes('book')).length;
+                    break;
+            }
+            
+            document.getElementById('recipientCount').textContent = count.toLocaleString();
+            document.getElementById('recipientCountInfo').textContent = count.toLocaleString();
+            document.getElementById('segmentInfo').textContent = 
+                document.getElementById('segmentSelect').options[document.getElementById('segmentSelect').selectedIndex].text;
+        }
+
+        function updateCharCount() {
+            const message = document.getElementById('broadcastMessage').value;
+            document.getElementById('charCount').textContent = `${message.length} characters`;
+        }
+
+        async function sendBroadcast() {
+            if (appState.broadcastInProgress) {
+                showError('Broadcast in Progress', 'Please wait for the current broadcast to complete.');
+                return;
+            }
+
+            const segment = document.getElementById('segmentSelect').value;
+            const message = document.getElementById('broadcastMessage').value.trim();
+            
+            if (!message) {
+                showError('Broadcast Failed', 'Please enter a message to send.');
+                return;
+            }
+
+            const recipientCount = document.getElementById('recipientCount').textContent;
+            if (recipientCount === '0') {
+                showError('No Recipients', 'No recipients found for the selected segment.');
+                return;
+            }
+
+            appState.broadcastInProgress = true;
+            showLoading();
+            
+            try {
+                const response = await fetch(CONFIG.API_BASE_URL + '/api/broadcast', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        segment: segment,
+                        message: message
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || result.message || 'Broadcast failed');
+                }
+
+                if (result.status === 'no_recipients') {
+                    showError('No Recipients', result.debug_info?.message || result.message);
+                } else {
+                    let successMessage = `✅ Broadcast Completed!\n\n• Sent: ${result.sent} messages\n• Failed: ${result.failed} messages\n• Total: ${result.total_recipients} recipients`;
+                    
+                    if (result.failed > 0) {
+                        successMessage += `\n\n⚠️ Some failures may be due to:\n• WhatsApp numbers not in allowed list\n• Users outside 24-hour window\n• Invalid phone numbers`;
+                    }
+                    
+                    showSuccess('Broadcast Results', successMessage);
+                }
+                
+                document.getElementById('broadcastMessage').value = '';
+                updateCharCount();
+                
+            } catch (error) {
+                console.error('Broadcast error:', error);
+                showError('Broadcast Failed', error.message);
+            } finally {
+                appState.broadcastInProgress = false;
+                hideLoading();
+            }
+        }
+
+        function showPreview() {
+            const message = document.getElementById('broadcastMessage').value.trim();
+            if (!message) {
+                showError('Preview Failed', 'Please enter a message to preview.');
+                return;
+            }
+            
+            document.getElementById('previewContent').textContent = message;
+            document.getElementById('previewModal').classList.remove('hidden');
+        }
+
+        function hidePreview() {
+            document.getElementById('previewModal').classList.add('hidden');
+        }
+
+        function confirmSend() {
+            hidePreview();
+            sendBroadcast();
+        }
+
+        // Sample Messages
+        function loadSampleMessage(type) {
+            const messages = {
+                special_offer: `🌊 *Special Summer Offer!* ☀️
+
+Hello! Al Bahr Sea Tours has an exclusive summer promotion just for you:
+
+🎯 *Summer Specials:*
+• *15% OFF* all dolphin watching tours
+• *Free snorkeling gear* with any booking
+• *Family package:* 4 people for the price of 3
+
+🏖️ *Perfect Summer Activities:*
+• Morning dolphin adventures 🐬
+• Afternoon snorkeling sessions 🤿
+• Sunset dhow cruises 🌅
+
+📅 *Valid until end of August*
+👨‍👩‍👧‍👦 *Perfect for family summer fun!*
+
+Ready to make summer memories? Book now! 📞 +968 24 123456`,
+
+                new_tours: `🚤 *New Tour Announcement!* 🌟
+
+We're excited to introduce our NEW tour packages at Al Bahr Sea Tours:
+
+🆕 *New Experiences:*
+• *Sunrise Fishing Trip* - 5:30 AM departure
+• *Private Island Picnic* - Exclusive beach experience
+• *Marine Photography Tour* - Capture underwater wonders
+
+🎯 *What's Included:*
+• Professional guides 🧭
+• All safety equipment 🦺
+• Refreshments & meals 🍎
+• Photography assistance 📸
+
+📅 *Bookings open now!*
+🌟 *Limited spots available*
+
+Discover new adventures with us! 🌊`
+            };
+            
+            document.getElementById('broadcastMessage').value = messages[type];
+            updateCharCount();
+        }
+
+        // Utility Functions
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch {
+                return dateString;
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loadingScreen').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingScreen').classList.add('hidden');
+        }
+
+        function showError(title, message) {
+            document.getElementById('errorTitle').textContent = title;
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').classList.remove('hidden');
+            
+            setTimeout(hideError, 5000);
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').classList.add('hidden');
+        }
+
+        function showSuccess(title, message) {
+            document.getElementById('successTitle').textContent = title;
+            document.getElementById('successText').textContent = message;
+            document.getElementById('successMessage').classList.remove('hidden');
+            
+            setTimeout(() => {
+                document.getElementById('successMessage').classList.add('hidden');
+            }, 3000);
+        }
+
+        function updateCurrentTime() {
+            document.getElementById('currentTime').textContent = new Date().toLocaleTimeString();
+        }
+
+        function startAutoRefresh() {
+            setInterval(() => {
+                loadAllData();
+                updateCurrentTime();
+            }, CONFIG.REFRESH_INTERVAL);
+        }
+
+        // Navigation Functions
+        function showSection(section) {
+            // Remove active class from all nav items
+            document.querySelectorAll('nav a').forEach(nav => {
+                nav.classList.remove('nav-active');
+                nav.classList.remove('bg-white', 'bg-opacity-20', 'shadow-lg');
+            });
+
+            // Add active class to clicked nav item
+            const activeLink = document.getElementById(`${section}Link`);
+            if (activeLink) {
+                activeLink.classList.add('nav-active');
+                activeLink.classList.add('bg-white', 'bg-opacity-20', 'shadow-lg');
+            }
+            
+            // Hide all sections
+            ['dashboard', 'leads', 'chat', 'broadcast'].forEach(sec => {
+                const sectionEl = document.getElementById(`${sec}Section`);
+                if (sectionEl) {
+                    sectionEl.style.display = 'none';
+                }
+            });
+            
+            // Show selected section
+            const targetSection = document.getElementById(`${section}Section`);
+            if (targetSection) {
+                targetSection.style.display = 'block';
+            }
+            
+            // Update page title
+            const titles = {
+                dashboard: 'Dashboard Overview',
+                leads: 'Leads Management',
+                chat: 'Live Chat Management',
+                broadcast: 'Broadcast Messages'
+            };
+            
+            const subtitles = {
+                dashboard: 'Al Bahr Sea Tours - Muscat, Oman',
+                leads: 'Manage and track all tour inquiries and bookings',
+                chat: 'Monitor and interact with active customer conversations',
+                broadcast: 'Send targeted messages to your audience'
+            };
+            
+            document.getElementById('pageTitle').textContent = titles[section] || 'Dashboard';
+            document.getElementById('pageSubtitle').textContent = subtitles[section] || 'Al Bahr Sea Tours';
+
+            if (section === 'broadcast') {
+                updateRecipientCount();
+            } else if (section === 'chat') {
+                updateActiveSessions();
+            }
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Navigation
+            document.getElementById('dashboardLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('dashboard');
+            });
+            
+            document.getElementById('leadsLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('leads');
+            });
+            
+            document.getElementById('chatLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('chat');
+            });
+            
+            document.getElementById('broadcastLink').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('broadcast');
+            });
+            
+            document.getElementById('viewAllLeads').addEventListener('click', (e) => {
+                e.preventDefault();
+                showSection('leads');
+            });
+            
+            // Refresh button
+            document.getElementById('refreshBtn').addEventListener('click', loadAllData);
+            
+            // Search functionality
+            const searchInput = document.getElementById('searchLeads');
+            if (searchInput) {
+                searchInput.addEventListener('input', searchLeads);
+            }
+            
+            // PDF Export
+            document.getElementById('exportPDF').addEventListener('click', exportToPDF);
+            
+            // Broadcast functionality
+            document.getElementById('segmentSelect').addEventListener('change', updateRecipientCount);
+            document.getElementById('broadcastMessage').addEventListener('input', updateCharCount);
+            document.getElementById('sendBroadcastBtn').addEventListener('click', sendBroadcast);
+            document.getElementById('previewBroadcast').addEventListener('click', showPreview);
+            document.getElementById('closePreview').addEventListener('click', hidePreview);
+            document.getElementById('cancelSend').addEventListener('click', hidePreview);
+            document.getElementById('confirmSend').addEventListener('click', confirmSend);
+            
+            // Chat functionality
+            document.getElementById('closeChat').addEventListener('click', closeChat);
+            document.getElementById('sendChatMessage').addEventListener('click', sendChatMessage);
+            const chatInput = document.getElementById('chatMessageInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        sendChatMessage();
+                    }
+                });
+            }
+        }
+
+        // PDF Export Function
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Title
+            doc.setFontSize(20);
+            doc.setTextColor(3, 105, 161);
+            doc.text('Al Bahr Sea Tours - Leads Report', 14, 22);
+            
+            // Date
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+            
+            // Table data
+            const tableData = appState.leads.map(lead => [
+                lead.timestamp,
+                lead.name || 'Unknown',
+                lead.contact || 'No contact',
+                lead.tourType,
+                lead.intent || 'Unknown',
+                lead.whatsappId || 'No ID'
+            ]);
+
+            // Table headers
+            const headers = [['Timestamp', 'Name', 'Contact', 'Tour Type', 'Intent', 'WhatsApp ID']];
+            
+            // Create table
+            doc.autoTable({
+                head: headers,
+                body: tableData,
+                startY: 40,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [3, 105, 161] },
+                alternateRowStyles: { fillColor: [240, 240, 240] },
+                margin: { top: 40 }
+            });
+
+            // Save PDF
+            doc.save(`Al-Bahr-Leads-${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // Chart Functions
+        function updateCharts() {
+            updateTourTypeChart();
+            updateIntentChart();
+        }
+
+        function updateTourTypeChart() {
+            const ctx = document.getElementById('tourChart').getContext('2d');
+            const tourTypes = {};
+            
+            appState.leads.forEach(lead => {
+                const type = lead.tourType || 'Not specified';
+                tourTypes[type] = (tourTypes[type] || 0) + 1;
+            });
+
+            if (window.tourChartInstance) {
+                window.tourChartInstance.destroy();
+            }
+
+            window.tourChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(tourTypes),
+                    datasets: [{
+                        data: Object.values(tourTypes),
+                        backgroundColor: [
+                            '#0369a1', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd',
+                            '#0d9488', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        title: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateIntentChart() {
+            const ctx = document.getElementById('intentChart').getContext('2d');
+            const intents = {
+                'Book Tour': 0,
+                'Other': 0
+            };
+            
+            appState.leads.forEach(lead => {
+                const intent = lead.intent || 'Other';
+                if (intent.toLowerCase().includes('book')) {
+                    intents['Book Tour']++;
+                } else {
+                    intents['Other']++;
+                }
+            });
+
+            if (window.intentChartInstance) {
+                window.intentChartInstance.destroy();
+            }
+
+            window.intentChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(intents),
+                    datasets: [{
+                        data: Object.values(intents),
+                        backgroundColor: ['#10b981', '#6b7280'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePaginationButtons(totalPages, container) {
+            let buttons = '';
+            
+            buttons += `
+                <button onclick="changePage(${appState.currentPage - 1})" 
+                        ${appState.currentPage === 1 ? 'disabled' : ''}
+                        class="px-3 py-1 rounded-lg border ${appState.currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                    Previous
+                </button>
+            `;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                buttons += `
+                    <button onclick="changePage(${i})" 
+                            class="px-3 py-1 rounded-lg border ${appState.currentPage === i ? 'bg-blue-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            buttons += `
+                <button onclick="changePage(${appState.currentPage + 1})" 
+                        ${appState.currentPage === totalPages ? 'disabled' : ''}
+                        class="px-3 py-1 rounded-lg border ${appState.currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                    Next
+                </button>
+            `;
+            
+            container.innerHTML = buttons;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(appState.filteredLeads.length / CONFIG.ITEMS_PER_PAGE);
+            if (page >= 1 && page <= totalPages) {
+                appState.currentPage = page;
+                updateLeadsTable();
+            }
+        }
+
+        function searchLeads() {
+            const query = document.getElementById('searchLeads').value.toLowerCase();
+            appState.searchQuery = query;
+            appState.currentPage = 1;
+            
+            if (!query) {
+                appState.filteredLeads = [...appState.leads];
+            } else {
+                appState.filteredLeads = appState.leads.filter(lead => 
+                    (lead.name && lead.name.toLowerCase().includes(query)) ||
+                    (lead.contact && lead.contact.toLowerCase().includes(query)) ||
+                    (lead.tourType && lead.tourType.toLowerCase().includes(query)) ||
+                    (lead.intent && lead.intent.toLowerCase().includes(query)) ||
+                    (lead.whatsappId && lead.whatsappId.toLowerCase().includes(query))
+                );
+            }
+            
+            updateLeadsTable();
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            feather.replace();
+            initApp();
+        });
+    </script>
+</body>
+</html>
