@@ -155,18 +155,7 @@ ARABIC_MESSAGES = {
     
     "ask_date": "📅 *التاريخ المفضل*\n\nممتاز! {} ضيوف إجمالاً:\n• {} بالغين\n• {} أطفال\n\nالرجاء إرسال *التاريخ المفضل*:\n\n📋 *أمثلة على التنسيق:*\n• **غداً**\n• **29 أكتوبر**\n• **الجمعة القادمة**\n• **15 نوفمبر**\n• **2024-12-25**\n\nسنتحقق من التوفر لتاريخك المختار! 📅",
     
-    "booking_complete": "🎉 *تم تأكيد الحجز!* ✅\n\nشكراً {}! تم حجز رحلتك بنجاح. 🐬\n\n📋 *تفاصيل الحجز:*\n👤 الاسم: {}\n📞 الاتصال: {}\n🚤 الجولة: {}\n👥 الضيوف: {} إجمالاً\n   • {} بالغين\n   • {} أطفال\n📅 التاريخ: {}\n🕒 الوقت: {}\n\n💰 *المجموع: {} ريال عماني*\n\nسيتصل بك فريقنا خلال ساعة واحدة لتأكيد التفاصيل. ⏰\nللمساعدة الفورية: +968 24 123456 📞\n\nاستعد لمغامرة بحرية رائعة! 🌊",
-    
-    "tour_descriptions": {
-        "Dolphin Watching": "🐬 *جولة مشاهدة الدلافين* 🌊\n\n*جولة لمدة ساعتين - 25 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• مرشد بحري خبير 🧭\n• معدات السلامة 🦺\n• المرطبات والمياه 🥤\n• فرص التصوير 📸\n\n*أفضل وقت:* جولات الصباح (8 صباحاً، 10 صباحاً)",
-        "Snorkeling": "🤿 *مغامرة الغوص* 🐠\n\n*جولة لمدة 3 ساعات - 35 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• معدات الغوص الكاملة 🤿\n• مرشد محترف 🧭\n• معدات السلامة 🦺\n• وجبات خفيفة ومرطبات 🍎🥤",
-        "Dhow Cruise": "⛵ *رحلة القارب التقليدي* 🌅\n\n*جولة لمدة ساعتين - 40 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• رحلة قارب عماني تقليدي ⛵\n• مشاهد الغروب 🌅\n• عشاء عماني 🍽️\n• مشروبات 🥤",
-        "Fishing Trip": "🎣 *رحلة صيد* 🐟\n\n*جولة لمدة 4 ساعات - 50 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمOL:*\n• معدات الصيد المحترفة 🎣\n• الطعم 🪱\n• مرشد صيد خبير 🧭\n• مرطبات ووجبات خفيفة 🥤🍎"
-    },
-    
-    "pricing": "💰 *أسعار الجولات والباقات* 💵\n\n🐬 *مشاهدة الدلافين:* 25 ريال عماني للبالغ\n🤿 *الغوص:* 35 ريال عماني للبالغ\n⛵ *رحلة القارب:* 40 ريال عماني للبالغ\n🎣 *رحلة الصيد:* 50 ريال عماني للبالغ\n\n👨‍👩‍👧‍👦 *عروض خاصة:*\n• الأطفال تحت 12 سنة: خصم 50٪\n• مجموعة 4+ أشخاص: خصم 10٪",
-    
-    "location": "📍 *موقعنا والتوجيهات* 🗺️\n\n🏖️ *جولات البحر للرحلات البحرية*\nمارينا بندر الروضة\nمسقط، سلطنة عمان\n\n🗺️ *خرائط جوجل:*\nhttps://maps.app.goo.gl/albahrseatours\n\n🚗 *مواقف سيارات:* متوفرة في المارينا\n⏰ *ساعات العمل:* 7:00 صباحاً - 7:00 مساءً يومياً"
+    "booking_complete": "🎉 *تم تأكيد الحجز!* ✅\n\nشكراً {}! تم حجز رحلتك بنجاح. 🐬\n\n📋 *تفاصيل الحجز:*\n👤 الاسم: {}\n📞 الاتصال: {}\n🚤 الجولة: {}\n👥 الضيوف: {} إجمالاً\n   • {} بالغين\n   • {} أطفال\n📅 التاريخ: {}\n🕒 الوقت: {}\n\n💰 *المجموع: {} ريال عماني*\n\nسيتصل بك فريقنا خلال ساعة واحدة لتأكيد التفاصيل. ⏰\nللمساعدة الفورية: +968 24 123456 📞\n\nاستعد لمغامرة بحرية رائعة! 🌊"
 }
 
 # Arabic to English mapping for common responses
@@ -211,39 +200,49 @@ def get_user_language(phone_number):
     return session.get('language', 'english')
 
 def send_language_selection(to):
-    """Send language selection menu"""
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🌊 Al Bahr Sea Tours"
-        },
-        "body": {
-            "text": ARABIC_MESSAGES["welcome"]
-        },
-        "action": {
-            "button": "🌐 Select Language",
-            "sections": [
-                {
-                    "title": "Choose Language / اختر اللغة",
-                    "rows": [
-                        {
-                            "id": "lang_english",
-                            "title": "🇺🇸 English",
-                            "description": "Continue in English"
-                        },
-                        {
-                            "id": "lang_arabic", 
-                            "title": "🇴🇲 العربية",
-                            "description": "المتابعة باللغة العربية"
-                        }
-                    ]
-                }
-            ]
+    """Send language selection menu with interactive list"""
+    try:
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "🌊 Al Bahr Sea Tours"
+            },
+            "body": {
+                "text": "Welcome! Please choose your preferred language:\n\nمرحباً! الرجاء اختيار لغتك المفضلة:"
+            },
+            "footer": {
+                "text": "We'll continue in your chosen language"
+            },
+            "action": {
+                "button": "🌐 Select Language / اختر اللغة",
+                "sections": [
+                    {
+                        "title": "Choose Language",
+                        "rows": [
+                            {
+                                "id": "lang_english",
+                                "title": "🇺🇸 English",
+                                "description": "Continue in English"
+                            },
+                            {
+                                "id": "lang_arabic", 
+                                "title": "🇴🇲 العربية",
+                                "description": "المتابعة باللغة العربية"
+                            }
+                        ]
+                    }
+                ]
+            }
         }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
+        
+        send_whatsapp_message(to, "", interactive_data)
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error sending language selection: {str(e)}")
+        # Fallback to simple text message
+        send_whatsapp_message(to, "🌊 Welcome to Al Bahr Sea Tours! Please type '1' for English or '2' for Arabic.")
+        return False
 
 # ==============================
 # HELPER FUNCTIONS
@@ -266,7 +265,7 @@ def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specifi
         return False
 
 def send_whatsapp_message(to, message, interactive_data=None):
-    """Send WhatsApp message via Meta API"""
+    """Send WhatsApp message via Meta API - ENHANCED ERROR HANDLING"""
     try:
         # Clean the phone number
         clean_to = clean_oman_number(to)
@@ -307,7 +306,16 @@ def send_whatsapp_message(to, message, interactive_data=None):
             return True
         else:
             error_message = response_data.get('error', {}).get('message', 'Unknown error')
-            logger.error(f"❌ WhatsApp API error {response.status_code}: {error_message}")
+            error_code = response_data.get('error', {}).get('code', 'Unknown code')
+            logger.error(f"❌ WhatsApp API error {response.status_code} (Code: {error_code}): {error_message}")
+            
+            # Log the payload that caused the error for debugging (without sensitive data)
+            debug_payload = {
+                "type": "interactive" if interactive_data else "text",
+                "to": clean_to[:6] + "..." if clean_to else "unknown",
+                "interactive_type": interactive_data.get('type') if interactive_data else None
+            }
+            logger.error(f"🔧 Failed payload info: {debug_payload}")
             return False
         
     except Exception as e:
@@ -355,6 +363,9 @@ def send_main_options_list(to):
         },
         "body": {
             "text": "Welcome to Oman's premier sea adventure company! 🚤\n\nChoose your sea adventure: 🗺️"
+        },
+        "footer": {
+            "text": "We're here to help you plan the perfect sea adventure!"
         },
         "action": {
             "button": "🌊 View Tours",
@@ -430,6 +441,9 @@ def send_main_options_list_arabic(to):
         },
         "body": {
             "text": "مرحباً بكم في شركة عمان الرائدة في المغامرات البحرية! 🚤\n\nاختر مغامرتك البحرية: 🗺️"
+        },
+        "footer": {
+            "text": "نحن هنا لمساعدتك في تخطيط مغامرة بحرية مثالية!"
         },
         "action": {
             "button": "🌊 عرض الجولات",
@@ -895,7 +909,17 @@ def handle_keyword_questions(text, phone_number, language='english'):
     # Location questions
     if any(word in text_lower for word in ['where', 'location', 'address', 'located', 'map', 'اين', 'موقع', 'عنوان']):
         if language == 'arabic':
-            response = ARABIC_MESSAGES["location"]
+            response = """📍 *موقعنا والتوجيهات* 🗺️
+
+🏖️ *جولات البحر للرحلات البحرية*
+مارينا بندر الروضة
+مسقط، سلطنة عمان
+
+🗺️ *خرائط جوجل:*
+https://maps.app.goo.gl/albahrseatours
+
+🚗 *مواقف سيارات:* متوفرة في المارينا
+⏰ *ساعات العمل:* 7:00 صباحاً - 7:00 مساءً يومياً"""
         else:
             response = """📍 *Our Location:* 🌊
 
@@ -916,33 +940,27 @@ We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
     # Price questions
     elif any(word in text_lower for word in ['price', 'cost', 'how much', 'fee', 'charge', 'سعر', 'كم', 'ثمن', 'تكلفة']):
         if language == 'arabic':
-            response = ARABIC_MESSAGES["pricing"]
+            response = """💰 *أسعار الجولات والباقات* 💵
+
+🐬 *مشاهدة الدلافين:* 25 ريال عماني للبالغ
+🤿 *الغوص:* 35 ريال عماني للبالغ
+⛵ *رحلة القارب:* 40 ريال عماني للبالغ
+🎣 *رحلة الصيد:* 50 ريال عماني للبالغ
+
+👨‍👩‍👧‍👦 *عروض خاصة:*
+• الأطفال تحت 12 سنة: خصم 50٪
+• مجموعة 4+ أشخاص: خصم 10٪"""
         else:
             response = """💰 *Tour Prices & Packages:* 💵
 
-🐬 *Dolphin Watching Tour:*
-• 2 hours • 25 OMR per adult
-• Children under 12: 50% discount
-• Includes: Guide, safety equipment, refreshments
-
-🤿 *Snorkeling Adventure:*
-• 3 hours • 35 OMR per adult
-• Children under 12: 50% discount  
-• Includes: Equipment, guide, snacks & drinks
-
-⛵ *Sunset Dhow Cruise:*
-• 2 hours • 40 OMR per adult
-• Children under 12: 50% discount
-• Includes: Traditional Omani dinner, drinks
-
-🎣 *Fishing Trip:*
-• 4 hours • 50 OMR per adult
-• Children under 12: 50% discount
-• Includes: Fishing gear, bait, refreshments
+🐬 *Dolphin Watching:* 25 OMR per adult
+🤿 *Snorkeling:* 35 OMR per adult  
+⛵ *Dhow Cruise:* 40 OMR per adult
+🎣 *Fishing Trip:* 50 OMR per adult
 
 👨‍👩‍👧‍👦 *Special Offers:*
-• Group of 4+ people: 10% discount
-• Family packages available!"""
+• Children under 12: 50% discount
+• Group of 4+ people: 10% discount"""
         send_whatsapp_message(phone_number, response)
         return True
     
@@ -1098,53 +1116,16 @@ def handle_interaction(interaction_id, phone_number):
     if language == 'arabic':
         arabic_responses = {
             # Tour options in Arabic
-            "dolphin_tour_ar": ARABIC_MESSAGES["tour_descriptions"]["Dolphin Watching"],
-            "snorkeling_ar": ARABIC_MESSAGES["tour_descriptions"]["Snorkeling"],
-            "dhow_cruise_ar": ARABIC_MESSAGES["tour_descriptions"]["Dhow Cruise"],
-            "fishing_ar": ARABIC_MESSAGES["tour_descriptions"]["Fishing Trip"],
+            "dolphin_tour_ar": "🐬 *جولة مشاهدة الدلافين* 🌊\n\n*جولة لمدة ساعتين - 25 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• مرشد بحري خبير 🧭\n• معدات السلامة 🦺\n• المرطبات والمياه 🥤\n• فرص التصوير 📸\n\n*أفضل وقت:* جولات الصباح (8 صباحاً، 10 صباحاً)",
+            "snorkeling_ar": "🤿 *مغامرة الغوص* 🐠\n\n*جولة لمدة 3 ساعات - 35 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• معدات الغوص الكاملة 🤿\n• مرشد محترف 🧭\n• معدات السلامة 🦺\n• وجبات خفيفة ومرطبات 🍎🥤",
+            "dhow_cruise_ar": "⛵ *رحلة القارب التقليدي* 🌅\n\n*جولة لمدة ساعتين - 40 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• رحلة قارب عماني تقليدي ⛵\n• مشاهد الغروب 🌅\n• عشاء عماني 🍽️\n• مشروبات 🥤",
+            "fishing_ar": "🎣 *رحلة صيد* 🐟\n\n*جولة لمدة 4 ساعات - 50 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• معدات الصيد المحترفة 🎣\n• الطعم 🪱\n• مرشد صيد خبير 🧭\n• مرطبات ووجبات خفيفة 🥤🍎",
             
             # Information options in Arabic
-            "pricing_ar": ARABIC_MESSAGES["pricing"],
-            "location_ar": ARABIC_MESSAGES["location"],
-            "schedule_ar": """🕒 *جدول الجولات والتوفر* 📅
-
-*مواعيد الانطلاق اليومية:*
-
-🌅 *مغامرات الصباح:*
-• 8:00 صباحاً - مشاهدة الدلافين 🐬
-• 9:00 صباحاً - الغوص 🤿
-• 10:00 صباحاً - مشاهدة الدلافين 🐬
-• 11:00 صباحاً - الغوص 🤿
-
-🌇 *تجارب الظهيرة:*
-• 2:00 ظهراً - رحلة صيد 🎣
-• 4:00 عصراً - رحلة القارب ⛵
-• 5:00 عصراً - دلافين الغروب 🐬
-
-🌅 *سحر المساء:*
-• 6:00 مساءً - رحلة القارب ⛵
-• 6:30 مساءً - رحلة الغروب 🌅
-
-📅 *يوصى بالحجز المسبق*
-⏰ *التسجيل:* 30 دقيقة قبل الانطلاق""",
-            
-            "contact_ar": """📞 *اتصل بجولات البحر* 📱
-
-*نحن هنا لمساعدتك في تخطيط مغامرة بحرية مثالية!* 🌊
-
-📞 *هاتف:* +968 24 123456
-📱 *واتساب:* +968 9123 4567
-📧 *بريد إلكتروني:* info@albahrseatours.com
-
-🌐 *الموقع:* www.albahrseatours.com
-
-⏰ *ساعات خدمة العملاء:*
-7:00 صباحاً - 7:00 مساءً يومياً
-
-📍 *زورنا:*
-مارينا بندر الروضة
-مسقط، عمان""",
-            
+            "pricing_ar": "💰 *أسعار الجولات والباقات* 💵\n\n🐬 *مشاهدة الدلافين:* 25 ريال عماني للبالغ\n🤿 *الغوص:* 35 ريال عماني للبالغ\n⛵ *رحلة القارب:* 40 ريال عماني للبالغ\n🎣 *رحلة الصيد:* 50 ريال عماني للبالغ\n\n👨‍👩‍👧‍👦 *عروض خاصة:*\n• الأطفال تحت 12 سنة: خصم 50٪\n• مجموعة 4+ أشخاص: خصم 10٪",
+            "location_ar": "📍 *موقعنا والتوجيهات* 🗺️\n\n🏖️ *جولات البحر للرحلات البحرية*\nمارينا بندر الروضة\nمسقط، سلطنة عمان\n\n🗺️ *خرائط جوجل:*\nhttps://maps.app.goo.gl/albahrseatours\n\n🚗 *مواقف سيارات:* متوفرة في المارينا\n⏰ *ساعات العمل:* 7:00 صباحاً - 7:00 مساءً يومياً",
+            "schedule_ar": "🕒 *جدول الجولات والتوفر* 📅\n\n*مواعيد الانطلاق اليومية:*\n\n🌅 *مغامرات الصباح:*\n• 8:00 صباحاً - مشاهدة الدلافين 🐬\n• 9:00 صباحاً - الغوص 🤿\n• 10:00 صباحاً - مشاهدة الدلافين 🐬\n• 11:00 صباحاً - الغوص 🤿\n\n🌇 *تجارب الظهيرة:*\n• 2:00 ظهراً - رحلة صيد 🎣\n• 4:00 عصراً - رحلة القارب ⛵\n• 5:00 عصراً - دلافين الغروب 🐬\n\n🌅 *سحر المساء:*\n• 6:00 مساءً - رحلة القارب ⛵\n• 6:30 مساءً - رحلة الغروب 🌅\n\n📅 *يوصى بالحجز المسبق*",
+            "contact_ar": "📞 *اتصل بجولات البحر* 📱\n\n*نحن هنا لمساعدتك في تخطيط مغامرة بحرية مثالية!* 🌊\n\n📞 *هاتف:* +968 24 123456\n📱 *واتساب:* +968 9123 4567\n📧 *بريد إلكتروني:* info@albahrseatours.com\n\n🌐 *الموقع:* www.albahrseatours.com\n\n⏰ *ساعات خدمة العملاء:*\n7:00 صباحاً - 7:00 مساءً يومياً\n\n📍 *زورنا:*\nمارينا بندر الروضة\nمسقط، عمان",
             "book_now_ar": lambda: start_booking_flow(phone_number, 'arabic')
         }
         
@@ -1156,176 +1137,19 @@ def handle_interaction(interaction_id, phone_number):
             send_whatsapp_message(phone_number, response)
             return True
     
-    # English menu interactions (existing code)
+    # English menu interactions
     responses = {
-        # Welcome button - now directly sends main list
-        "view_options": lambda: send_main_options_list(phone_number),
-        
         # Tour options
-        "dolphin_tour": """🐬 *Dolphin Watching Tour* 🌊
-
-*Experience the magic of swimming with wild dolphins!* 
-
-📅 *Duration:* 2 hours
-💰 *Price:* 25 OMR per adult (50% off for children)
-👥 *Group size:* Small groups (max 8 people)
-
-*What's included:*
-• Expert marine guide 🧭
-• Safety equipment & life jackets 🦺
-• Refreshments & bottled water 🥤
-• Photography opportunities 📸
-
-*Best time:* Morning tours (8AM, 10AM)
-*Success rate:* 95% dolphin sightings! 
-
-Ready to book? Select 'Book Now'! 📅""",
-
-        "snorkeling": """🤿 *Snorkeling Adventure* 🐠
-
-*Discover Oman's underwater paradise!* 
-
-📅 *Duration:* 3 hours
-💰 *Price:* 35 OMR per adult (50% off for children)
-👥 *Group size:* Small groups (max 6 people)
-
-*What's included:*
-• Full snorkeling equipment 🤿
-• Professional guide 🧭
-• Safety equipment 🦺
-• Snacks & refreshments 🍎🥤
-
-*What you'll see:*
-• Vibrant coral gardens 🌸
-• Tropical fish species 🐠
-• Sea turtles (if lucky!) 🐢
-• Crystal clear waters 💎
-
-Ready to explore? Select 'Book Now'! 🌊""",
-
-        "dhow_cruise": """⛵ *Traditional Dhow Cruise* 🌅
-
-*Sail into the sunset on a traditional Omani boat!*
-
-📅 *Duration:* 2 hours
-💰 *Price:* 40 OMR per adult (50% off for children)
-👥 *Group size:* Intimate groups (max 10 people)
-
-*What's included:*
-• Traditional Omani dhow cruise ⛵
-• Sunset views & photography 🌅
-• Omani dinner & refreshments 🍽️
-• Soft drinks & water 🥤
-
-*Departure times:* 4:00 PM, 6:00 PM
-*Perfect for:* Couples, families, special occasions 
-
-Ready to sail? Select 'Book Now'! ⛵""",
-
-        "fishing": """🎣 *Deep Sea Fishing Trip* 🐟
-
-*Experience the thrill of deep sea fishing!*
-
-📅 *Duration:* 4 hours
-💰 *Price:* 50 OMR per adult (50% off for children)
-👥 *Group size:* Small groups (max 4 people)
-
-*What's included:*
-• Professional fishing gear 🎣
-• Bait & tackle 🪱
-• Expert fishing guide 🧭
-• Refreshments & snacks 🥤🍎
-• Clean & prepare your catch 🐟
-
-*Suitable for:* Beginners to experienced
-*Includes:* Fishing license
-
-Ready to catch the big one? Select 'Book Now'! 🎣""",
+        "dolphin_tour": "🐬 *Dolphin Watching Tour* 🌊\n\n*Experience the magic of swimming with wild dolphins!* \n\n📅 *Duration:* 2 hours\n💰 *Price:* 25 OMR per adult (50% off for children)\n👥 *Group size:* Small groups (max 8 people)\n\n*What's included:*\n• Expert marine guide 🧭\n• Safety equipment & life jackets 🦺\n• Refreshments & bottled water 🥤\n• Photography opportunities 📸\n\n*Best time:* Morning tours (8AM, 10AM)\n*Success rate:* 95% dolphin sightings!",
+        "snorkeling": "🤿 *Snorkeling Adventure* 🐠\n\n*Discover Oman's underwater paradise!* \n\n📅 *Duration:* 3 hours\n💰 *Price:* 35 OMR per adult (50% off for children)\n👥 *Group size:* Small groups (max 6 people)\n\n*What's included:*\n• Full snorkeling equipment 🤿\n• Professional guide 🧭\n• Safety equipment 🦺\n• Snacks & refreshments 🍎🥤\n\n*What you'll see:*\n• Vibrant coral gardens 🌸\n• Tropical fish species 🐠\n• Sea turtles (if lucky!) 🐢\n• Crystal clear waters 💎",
+        "dhow_cruise": "⛵ *Traditional Dhow Cruise* 🌅\n\n*Sail into the sunset on a traditional Omani boat!*\n\n📅 *Duration:* 2 hours\n💰 *Price:* 40 OMR per adult (50% off for children)\n👥 *Group size:* Intimate groups (max 10 people)\n\n*What's included:*\n• Traditional Omani dhow cruise ⛵\n• Sunset views & photography 🌅\n• Omani dinner & refreshments 🍽️\n• Soft drinks & water 🥤\n\n*Departure times:* 4:00 PM, 6:00 PM\n*Perfect for:* Couples, families, special occasions",
+        "fishing": "🎣 *Deep Sea Fishing Trip* 🐟\n\n*Experience the thrill of deep sea fishing!*\n\n📅 *Duration:* 4 hours\n💰 *Price:* 50 OMR per adult (50% off for children)\n👥 *Group size:* Small groups (max 4 people)\n\n*What's included:*\n• Professional fishing gear 🎣\n• Bait & tackle 🪱\n• Expert fishing guide 🧭\n• Refreshments & snacks 🥤🍎\n• Clean & prepare your catch 🐟\n\n*Suitable for:* Beginners to experienced\n*Includes:* Fishing license",
 
         # Information options
-        "pricing": """💰 *Tour Prices & Packages* 💵
-
-*All prices include safety equipment & guides*
-*Children under 12 get 50% discount!*
-
-🐬 *Dolphin Watching:* 25 OMR per adult
-• 2 hours • Small groups • Refreshments included
-
-🤿 *Snorkeling Adventure:* 35 OMR per adult  
-• 3 hours • Full equipment • Snacks & drinks
-
-⛵ *Dhow Cruise:* 40 OMR per adult
-• 2 hours • Traditional boat • Dinner included
-
-🎣 *Fishing Trip:* 50 OMR per adult
-• 4 hours • Professional gear • Refreshments
-
-👨‍👩‍👧‍👦 *Special Offers:*
-• Group of 4+ people: 10% discount
-• Family packages available
-
-Book your adventure today! 📅""",
-
-        "location": """📍 *Our Location & Directions* 🗺️
-
-🏖️ *Al Bahr Sea Tours*
-Marina Bandar Al Rowdha
-Muscat, Sultanate of Oman
-
-🗺️ *Google Maps:*
-https://maps.app.goo.gl/albahrseatours
-
-🚗 *How to reach us:*
-• From Muscat City Center: 15 minutes
-• From Seeb Airport: 25 minutes  
-• From Al Mouj: 10 minutes
-
-🅿️ *Parking:* Ample parking available at marina
-
-⏰ *Operating Hours:*
-7:00 AM - 7:00 PM Daily
-
-We're easy to find at Bandar Al Rowdha Marina! 🚤""",
-
-        "schedule": """🕒 *Tour Schedule & Availability* 📅
-
-*Daily Departure Times:*
-
-🌅 *Morning Adventures:*
-• 8:00 AM - Dolphin Watching 🐬
-• 9:00 AM - Snorkeling 🤿
-• 10:00 AM - Dolphin Watching 🐬
-• 11:00 AM - Snorkeling 🤿
-
-🌇 *Afternoon Experiences:*
-• 2:00 PM - Fishing Trip 🎣
-• 4:00 PM - Dhow Cruise ⛵
-• 5:00 PM - Sunset Dolphin 🐬
-
-🌅 *Evening Magic:*
-• 6:00 PM - Dhow Cruise ⛵
-• 6:30 PM - Sunset Cruise 🌅
-
-📅 *Advanced booking recommended*
-⏰ *Check-in:* 30 minutes before departure""",
-
-        "contact": """📞 *Contact Al Bahr Sea Tours* 📱
-
-*We're here to help you plan the perfect sea adventure!* 🌊
-
-📞 *Phone:* +968 24 123456
-📱 *WhatsApp:* +968 9123 4567
-📧 *Email:* info@albahrseatours.com
-
-🌐 *Website:* www.albahrseatours.com
-
-⏰ *Customer Service Hours:*
-7:00 AM - 7:00 PM Daily
-
-📍 *Visit Us:*
-Marina Bandar Al Rowdha
-Muscat, Oman""",
-
+        "pricing": "💰 *Tour Prices & Packages* 💵\n\n*All prices include safety equipment & guides*\n*Children under 12 get 50% discount!*\n\n🐬 *Dolphin Watching:* 25 OMR per adult\n• 2 hours • Small groups • Refreshments included\n\n🤿 *Snorkeling Adventure:* 35 OMR per adult  \n• 3 hours • Full equipment • Snacks & drinks\n\n⛵ *Dhow Cruise:* 40 OMR per adult\n• 2 hours • Traditional boat • Dinner included\n\n🎣 *Fishing Trip:* 50 OMR per adult\n• 4 hours • Professional gear • Refreshments\n\n👨‍👩‍👧‍👦 *Special Offers:*\n• Group of 4+ people: 10% discount\n• Family packages available",
+        "location": "📍 *Our Location & Directions* 🗺️\n\n🏖️ *Al Bahr Sea Tours*\nMarina Bandar Al Rowdha\nMuscat, Sultanate of Oman\n\n🗺️ *Google Maps:*\nhttps://maps.app.goo.gl/albahrseatours\n\n🚗 *How to reach us:*\n• From Muscat City Center: 15 minutes\n• From Seeb Airport: 25 minutes  \n• From Al Mouj: 10 minutes\n\n🅿️ *Parking:* Ample parking available at marina\n\n⏰ *Operating Hours:*\n7:00 AM - 7:00 PM Daily\n\nWe're easy to find at Bandar Al Rowdha Marina! 🚤",
+        "schedule": "🕒 *Tour Schedule & Availability* 📅\n\n*Daily Departure Times:*\n\n🌅 *Morning Adventures:*\n• 8:00 AM - Dolphin Watching 🐬\n• 9:00 AM - Snorkeling 🤿\n• 10:00 AM - Dolphin Watching 🐬\n• 11:00 AM - Snorkeling 🤿\n\n🌇 *Afternoon Experiences:*\n• 2:00 PM - Fishing Trip 🎣\n• 4:00 PM - Dhow Cruise ⛵\n• 5:00 PM - Sunset Dolphin 🐬\n\n🌅 *Evening Magic:*\n• 6:00 PM - Dhow Cruise ⛵\n• 6:30 PM - Sunset Cruise 🌅\n\n📅 *Advanced booking recommended*\n⏰ *Check-in:* 30 minutes before departure",
+        "contact": "📞 *Contact Al Bahr Sea Tours* 📱\n\n*We're here to help you plan the perfect sea adventure!* 🌊\n\n📞 *Phone:* +968 24 123456\n📱 *WhatsApp:* +968 9123 4567\n📧 *Email:* info@albahrseatours.com\n\n🌐 *Website:* www.albahrseatours.com\n\n⏰ *Customer Service Hours:*\n7:00 AM - 7:00 PM Daily\n\n📍 *Visit Us:*\nMarina Bandar Al Rowdha\nMuscat, Oman",
         "book_now": lambda: start_booking_flow(phone_number, 'english')
     }
     
@@ -1899,7 +1723,7 @@ def health():
         "chat_messages_stored": sum(len(msgs) for msgs in chat_messages.values()),
         "unique_chat_users": len(chat_messages),
         "admin_conversations_tracked": len(admin_message_tracker),
-        "version": "11.0 - Admin Conversation Protection & Enhanced Language Support"
+        "version": "13.0 - Interactive Lists Restored & Enhanced"
     }
     return jsonify(status)
 
