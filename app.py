@@ -200,22 +200,19 @@ def get_user_language(phone_number):
     return session.get('language', 'english')
 
 def send_language_selection(to):
-    """Send language selection menu with interactive list"""
+    """Send language selection menu with interactive list - FIXED STRUCTURE"""
     try:
         interactive_data = {
             "type": "list",
             "header": {
                 "type": "text",
-                "text": "🌊 Al Bahr Sea Tours"
+                "text": "Al Bahr Sea Tours"
             },
             "body": {
-                "text": "Welcome! Please choose your preferred language:\n\nمرحباً! الرجاء اختيار لغتك المفضلة:"
-            },
-            "footer": {
-                "text": "We'll continue in your chosen language"
+                "text": "Welcome! Please choose your language:\n\nمرحباً! الرجاء اختيار لغتك:"
             },
             "action": {
-                "button": "🌐 Select Language / اختر اللغة",
+                "button": "Select Language",
                 "sections": [
                     {
                         "title": "Choose Language",
@@ -228,7 +225,7 @@ def send_language_selection(to):
                             {
                                 "id": "lang_arabic", 
                                 "title": "🇴🇲 العربية",
-                                "description": "المتابعة باللغة العربية"
+                                "description": "المتابعة بالعربية"
                             }
                         ]
                     }
@@ -236,13 +233,14 @@ def send_language_selection(to):
             }
         }
         
-        send_whatsapp_message(to, "", interactive_data)
-        return True
+        logger.info(f"📋 Sending language selection list to {to}")
+        return send_whatsapp_message(to, "", interactive_data)
+        
     except Exception as e:
         logger.error(f"❌ Error sending language selection: {str(e)}")
         # Fallback to simple text message
-        send_whatsapp_message(to, "🌊 Welcome to Al Bahr Sea Tours! Please type '1' for English or '2' for Arabic.")
-        return False
+        fallback_msg = "🌊 Welcome to Al Bahr Sea Tours!\n\nPlease choose your language:\n1. Type '1' for English 🇺🇸\n2. Type '2' for Arabic 🇴🇲"
+        return send_whatsapp_message(to, fallback_msg)
 
 # ==============================
 # HELPER FUNCTIONS
@@ -280,20 +278,31 @@ def send_whatsapp_message(to, message, interactive_data=None):
         }
         
         if interactive_data:
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": clean_to,
-                "type": "interactive",
-                "interactive": interactive_data
-            }
+            # Validate and clean interactive data
+            cleaned_interactive = clean_interactive_data(interactive_data)
+            if not cleaned_interactive:
+                logger.error("❌ Invalid interactive data after cleaning")
+                # Fallback to text
+                fallback_msg = "Please choose an option:\n\n" + message if message else "Please select from the menu options."
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": clean_to,
+                    "type": "text",
+                    "text": {"body": fallback_msg}
+                }
+            else:
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": clean_to,
+                    "type": "interactive",
+                    "interactive": cleaned_interactive
+                }
         else:
             payload = {
                 "messaging_product": "whatsapp",
                 "to": clean_to,
                 "type": "text",
-                "text": {
-                    "body": message
-                }
+                "text": {"body": message}
             }
 
         logger.info(f"📤 Sending WhatsApp message to {clean_to}")
@@ -309,18 +318,74 @@ def send_whatsapp_message(to, message, interactive_data=None):
             error_code = response_data.get('error', {}).get('code', 'Unknown code')
             logger.error(f"❌ WhatsApp API error {response.status_code} (Code: {error_code}): {error_message}")
             
-            # Log the payload that caused the error for debugging (without sensitive data)
-            debug_payload = {
-                "type": "interactive" if interactive_data else "text",
-                "to": clean_to[:6] + "..." if clean_to else "unknown",
-                "interactive_type": interactive_data.get('type') if interactive_data else None
-            }
-            logger.error(f"🔧 Failed payload info: {debug_payload}")
+            # Log detailed error info for debugging
+            if 'error' in response_data and 'error_data' in response_data['error']:
+                error_details = response_data['error']['error_data']
+                logger.error(f"🔧 Error details: {error_details}")
+            
             return False
         
     except Exception as e:
         logger.error(f"🚨 Failed to send WhatsApp message: {str(e)}")
         return False
+
+def clean_interactive_data(interactive_data):
+    """Clean and validate interactive data to meet WhatsApp API requirements"""
+    try:
+        if not interactive_data or 'type' not in interactive_data:
+            return None
+            
+        if interactive_data['type'] == 'list':
+            # Ensure all required fields are present and properly formatted
+            cleaned = {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": interactive_data.get('header', {}).get('text', 'Menu')[:60]  # Limit header length
+                },
+                "body": {
+                    "text": interactive_data.get('body', {}).get('text', 'Please select an option')[:1024]  # Limit body length
+                },
+                "action": {
+                    "button": interactive_data.get('action', {}).get('button', 'Options')[:20],  # Limit button text
+                    "sections": []
+                }
+            }
+            
+            # Clean sections and rows
+            sections = interactive_data.get('action', {}).get('sections', [])
+            for section in sections[:10]:  # Max 10 sections
+                cleaned_section = {
+                    "title": section.get('title', 'Options')[:24],  # Limit title length
+                    "rows": []
+                }
+                
+                rows = section.get('rows', [])
+                for row in rows[:10]:  # Max 10 rows per section
+                    cleaned_row = {
+                        "id": row.get('id', 'option')[:200],  # Limit ID length
+                        "title": row.get('title', 'Option')[:24],  # Limit title length
+                    }
+                    # Description is optional but must be < 72 chars if present
+                    if 'description' in row and row['description']:
+                        cleaned_row["description"] = row['description'][:72]
+                    
+                    cleaned_section["rows"].append(cleaned_row)
+                
+                if cleaned_section["rows"]:  # Only add section if it has rows
+                    cleaned["action"]["sections"].append(cleaned_section)
+            
+            # Must have at least one section with rows
+            if not cleaned["action"]["sections"]:
+                return None
+                
+            return cleaned
+            
+        return None
+        
+    except Exception as e:
+        logger.error(f"❌ Error cleaning interactive data: {str(e)}")
+        return None
 
 def clean_oman_number(number):
     """Clean and validate Oman phone numbers"""
@@ -354,160 +419,200 @@ def send_welcome_message(to, language='english'):
         send_main_options_list(to)
 
 def send_main_options_list(to):
-    """Send ALL options in one list - English version"""
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🌊 Al Bahr Sea Tours"
-        },
-        "body": {
-            "text": "Welcome to Oman's premier sea adventure company! 🚤\n\nChoose your sea adventure: 🗺️"
-        },
-        "footer": {
-            "text": "We're here to help you plan the perfect sea adventure!"
-        },
-        "action": {
-            "button": "🌊 View Tours",
-            "sections": [
-                {
-                    "title": "🚤 Popular Tours",
-                    "rows": [
-                        {
-                            "id": "dolphin_tour",
-                            "title": "🐬 Dolphin Watching",
-                            "description": "Swim with dolphins in their natural habitat"
-                        },
-                        {
-                            "id": "snorkeling", 
-                            "title": "🤿 Snorkeling",
-                            "description": "Explore vibrant coral reefs and marine life"
-                        },
-                        {
-                            "id": "dhow_cruise",
-                            "title": "⛵ Dhow Cruise", 
-                            "description": "Traditional Omani boat sunset experience"
-                        },
-                        {
-                            "id": "fishing",
-                            "title": "🎣 Fishing Trip",
-                            "description": "Deep sea fishing adventure"
-                        }
-                    ]
-                },
-                {
-                    "title": "ℹ️ Information & Booking",
-                    "rows": [
-                        {
-                            "id": "pricing",
-                            "title": "💰 Pricing",
-                            "description": "Tour prices and packages"
-                        },
-                        {
-                            "id": "location",
-                            "title": "📍 Location",
-                            "description": "Our marina address and directions"
-                        },
-                        {
-                            "id": "schedule",
-                            "title": "🕒 Schedule",
-                            "description": "Tour timings and availability"
-                        },
-                        {
-                            "id": "contact",
-                            "title": "📞 Contact",
-                            "description": "Get in touch with our team"
-                        },
-                        {
-                            "id": "book_now",
-                            "title": "📅 Book Now", 
-                            "description": "Reserve your sea adventure"
-                        }
-                    ]
-                }
-            ]
+    """Send ALL options in one list - English version - FIXED STRUCTURE"""
+    try:
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "Al Bahr Sea Tours"
+            },
+            "body": {
+                "text": "Welcome! Choose your adventure:"
+            },
+            "action": {
+                "button": "View Options",
+                "sections": [
+                    {
+                        "title": "Popular Tours",
+                        "rows": [
+                            {
+                                "id": "dolphin_tour",
+                                "title": "🐬 Dolphin Watching",
+                                "description": "Swim with dolphins"
+                            },
+                            {
+                                "id": "snorkeling", 
+                                "title": "🤿 Snorkeling",
+                                "description": "Explore coral reefs"
+                            },
+                            {
+                                "id": "dhow_cruise",
+                                "title": "⛵ Dhow Cruise", 
+                                "description": "Sunset experience"
+                            },
+                            {
+                                "id": "fishing",
+                                "title": "🎣 Fishing Trip",
+                                "description": "Deep sea fishing"
+                            }
+                        ]
+                    },
+                    {
+                        "title": "Info & Booking",
+                        "rows": [
+                            {
+                                "id": "pricing",
+                                "title": "💰 Pricing",
+                                "description": "Tour prices"
+                            },
+                            {
+                                "id": "location",
+                                "title": "📍 Location",
+                                "description": "Our address"
+                            },
+                            {
+                                "id": "schedule",
+                                "title": "🕒 Schedule",
+                                "description": "Tour timings"
+                            },
+                            {
+                                "id": "contact",
+                                "title": "📞 Contact",
+                                "description": "Get in touch"
+                            },
+                            {
+                                "id": "book_now",
+                                "title": "📅 Book Now", 
+                                "description": "Reserve tour"
+                            }
+                        ]
+                    }
+                ]
+            }
         }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
+        
+        logger.info(f"📋 Sending main menu to {to}")
+        return send_whatsapp_message(to, "", interactive_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending main menu: {str(e)}")
+        # Fallback to text menu
+        fallback_msg = """🌊 Al Bahr Sea Tours - Main Menu
+
+Popular Tours:
+1. 🐬 Dolphin Watching
+2. 🤿 Snorkeling  
+3. ⛵ Dhow Cruise
+4. 🎣 Fishing Trip
+
+Info & Booking:
+5. 💰 Pricing
+6. 📍 Location
+7. 🕒 Schedule
+8. 📞 Contact
+9. 📅 Book Now
+
+Type the number of your choice."""
+        return send_whatsapp_message(to, fallback_msg)
 
 def send_main_options_list_arabic(to):
-    """Send ALL options in one list - Arabic version"""
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🌊 جولات البحر للرحلات البحرية"
-        },
-        "body": {
-            "text": "مرحباً بكم في شركة عمان الرائدة في المغامرات البحرية! 🚤\n\nاختر مغامرتك البحرية: 🗺️"
-        },
-        "footer": {
-            "text": "نحن هنا لمساعدتك في تخطيط مغامرة بحرية مثالية!"
-        },
-        "action": {
-            "button": "🌊 عرض الجولات",
-            "sections": [
-                {
-                    "title": "🚤 الجولات الشعبية",
-                    "rows": [
-                        {
-                            "id": "dolphin_tour_ar",
-                            "title": "🐬 مشاهدة الدلافين",
-                            "description": "السباحة مع الدلافين في بيئتها الطبيعية"
-                        },
-                        {
-                            "id": "snorkeling_ar", 
-                            "title": "🤿 الغوص",
-                            "description": "استكشاف الشعاب المرجانية والحياة البحرية"
-                        },
-                        {
-                            "id": "dhow_cruise_ar",
-                            "title": "⛵ رحلة القارب", 
-                            "description": "تجربة غروب الشمس على القارب العماني التقليدي"
-                        },
-                        {
-                            "id": "fishing_ar",
-                            "title": "🎣 رحلة صيد",
-                            "description": "مغامرة صيد في أعماق البحر"
-                        }
-                    ]
-                },
-                {
-                    "title": "ℹ️ المعلومات والحجز",
-                    "rows": [
-                        {
-                            "id": "pricing_ar",
-                            "title": "💰 الأسعار",
-                            "description": "أسعار الجولات والباقات"
-                        },
-                        {
-                            "id": "location_ar",
-                            "title": "📍 الموقع",
-                            "description": "عنوان المارينا والتوجيهات"
-                        },
-                        {
-                            "id": "schedule_ar",
-                            "title": "🕒 الجدول",
-                            "description": "مواعيد الجولات والتوفر"
-                        },
-                        {
-                            "id": "contact_ar",
-                            "title": "📞 اتصل بنا",
-                            "description": "تواصل مع فريقنا"
-                        },
-                        {
-                            "id": "book_now_ar",
-                            "title": "📅 احجز الآن", 
-                            "description": "احجز مغامرتك البحرية"
-                        }
-                    ]
-                }
-            ]
+    """Send ALL options in one list - Arabic version - FIXED STRUCTURE"""
+    try:
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "جولات البحر"
+            },
+            "body": {
+                "text": "مرحباً! اختر مغامرتك:"
+            },
+            "action": {
+                "button": "عرض الخيارات",
+                "sections": [
+                    {
+                        "title": "الجولات الشعبية",
+                        "rows": [
+                            {
+                                "id": "dolphin_tour_ar",
+                                "title": "🐬 مشاهدة الدلافين",
+                                "description": "السباحة مع الدلافين"
+                            },
+                            {
+                                "id": "snorkeling_ar", 
+                                "title": "🤿 الغوص",
+                                "description": "استكشاف الشعاب"
+                            },
+                            {
+                                "id": "dhow_cruise_ar",
+                                "title": "⛵ رحلة القارب", 
+                                "description": "تجربة الغروب"
+                            },
+                            {
+                                "id": "fishing_ar",
+                                "title": "🎣 رحلة صيد",
+                                "description": "صيد في البحر"
+                            }
+                        ]
+                    },
+                    {
+                        "title": "المعلومات والحجز",
+                        "rows": [
+                            {
+                                "id": "pricing_ar",
+                                "title": "💰 الأسعار",
+                                "description": "أسعار الجولات"
+                            },
+                            {
+                                "id": "location_ar",
+                                "title": "📍 الموقع",
+                                "description": "عنواننا"
+                            },
+                            {
+                                "id": "schedule_ar",
+                                "title": "🕒 الجدول",
+                                "description": "مواعيد الجولات"
+                            },
+                            {
+                                "id": "contact_ar",
+                                "title": "📞 اتصل بنا",
+                                "description": "تواصل معنا"
+                            },
+                            {
+                                "id": "book_now_ar",
+                                "title": "📅 احجز الآن", 
+                                "description": "احجز جولة"
+                            }
+                        ]
+                    }
+                ]
+            }
         }
-    }
-    
-    send_whatsapp_message(to, "", interactive_data)
+        
+        logger.info(f"📋 Sending Arabic main menu to {to}")
+        return send_whatsapp_message(to, "", interactive_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending Arabic main menu: {str(e)}")
+        # Fallback to Arabic text menu
+        fallback_msg = """🌊 جولات البحر - القائمة الرئيسية
+
+الجولات الشعبية:
+1. 🐬 مشاهدة الدلافين
+2. 🤿 الغوص
+3. ⛵ رحلة القارب  
+4. 🎣 رحلة صيد
+
+المعلومات والحجز:
+5. 💰 الأسعار
+6. 📍 الموقع
+7. 🕒 الجدول
+8. 📞 اتصل بنا
+9. 📅 احجز الآن
+
+اكتب رقم خيارك."""
+        return send_whatsapp_message(to, fallback_msg)
 
 def start_booking_flow(to, language='english'):
     """Start the booking flow by asking for name"""
@@ -547,99 +652,125 @@ def ask_for_contact(to, name, language='english'):
     send_whatsapp_message(to, message)
 
 def ask_for_tour_type(to, name, contact, language='english'):
-    """Ask for tour type using interactive list"""
-    # Update session with contact
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_tour_type',
-            'name': name,
-            'contact': contact
-        })
-    
-    if language == 'arabic':
-        interactive_data = {
-            "type": "list",
-            "header": {
-                "type": "text",
-                "text": "🚤 اختر جولتك"
-            },
-            "body": {
-                "text": f"ممتاز {name}! أي جولة تريد حجزها؟"
-            },
-            "action": {
-                "button": "اختر الجولة",
-                "sections": [
-                    {
-                        "title": "الجولات المتاحة",
-                        "rows": [
-                            {
-                                "id": f"book_dolphin_ar|{name}|{contact}",
-                                "title": "🐬 مشاهدة الدلافين",
-                                "description": "ساعتين • 25 ريال عماني للشخص"
-                            },
-                            {
-                                "id": f"book_snorkeling_ar|{name}|{contact}", 
-                                "title": "🤿 الغوص",
-                                "description": "3 ساعات • 35 ريال عماني للشخص"
-                            },
-                            {
-                                "id": f"book_dhow_ar|{name}|{contact}",
-                                "title": "⛵ رحلة القارب", 
-                                "description": "ساعتين • 40 ريال عماني للشخص"
-                            },
-                            {
-                                "id": f"book_fishing_ar|{name}|{contact}",
-                                "title": "🎣 رحلة صيد",
-                                "description": "4 ساعات • 50 ريال عماني للشخص"
-                            }
-                        ]
-                    }
-                ]
+    """Ask for tour type using interactive list - FIXED STRUCTURE"""
+    try:
+        if language == 'arabic':
+            interactive_data = {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": "اختر الجولة"
+                },
+                "body": {
+                    "text": f"ممتاز {name}! أي جولة تريد؟"
+                },
+                "action": {
+                    "button": "اختر الجولة",
+                    "sections": [
+                        {
+                            "title": "الجولات المتاحة",
+                            "rows": [
+                                {
+                                    "id": f"book_dolphin_ar|{name}|{contact}",
+                                    "title": "🐬 مشاهدة الدلافين",
+                                    "description": "25 ريال للشخص"
+                                },
+                                {
+                                    "id": f"book_snorkeling_ar|{name}|{contact}", 
+                                    "title": "🤿 الغوص",
+                                    "description": "35 ريال للشخص"
+                                },
+                                {
+                                    "id": f"book_dhow_ar|{name}|{contact}",
+                                    "title": "⛵ رحلة القارب", 
+                                    "description": "40 ريال للشخص"
+                                },
+                                {
+                                    "id": f"book_fishing_ar|{name}|{contact}",
+                                    "title": "🎣 رحلة صيد",
+                                    "description": "50 ريال للشخص"
+                                }
+                            ]
+                        }
+                    ]
+                }
             }
-        }
-    else:
-        interactive_data = {
-            "type": "list",
-            "header": {
-                "type": "text",
-                "text": "🚤 Choose Your Tour"
-            },
-            "body": {
-                "text": f"Great {name}! Which tour would you like to book?"
-            },
-            "action": {
-                "button": "Select Tour",
-                "sections": [
-                    {
-                        "title": "Available Tours",
-                        "rows": [
-                            {
-                                "id": f"book_dolphin|{name}|{contact}",
-                                "title": "🐬 Dolphin Watching",
-                                "description": "2 hours • 25 OMR per person"
-                            },
-                            {
-                                "id": f"book_snorkeling|{name}|{contact}", 
-                                "title": "🤿 Snorkeling",
-                                "description": "3 hours • 35 OMR per person"
-                            },
-                            {
-                                "id": f"book_dhow|{name}|{contact}",
-                                "title": "⛵ Dhow Cruise", 
-                                "description": "2 hours • 40 OMR per person"
-                            },
-                            {
-                                "id": f"book_fishing|{name}|{contact}",
-                                "title": "🎣 Fishing Trip",
-                                "description": "4 hours • 50 OMR per person"
-                            }
-                        ]
-                    }
-                ]
+        else:
+            interactive_data = {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": "Choose Tour"
+                },
+                "body": {
+                    "text": f"Great {name}! Which tour?"
+                },
+                "action": {
+                    "button": "Select Tour",
+                    "sections": [
+                        {
+                            "title": "Available Tours",
+                            "rows": [
+                                {
+                                    "id": f"book_dolphin|{name}|{contact}",
+                                    "title": "🐬 Dolphin Watching",
+                                    "description": "25 OMR per person"
+                                },
+                                {
+                                    "id": f"book_snorkeling|{name}|{contact}", 
+                                    "title": "🤿 Snorkeling",
+                                    "description": "35 OMR per person"
+                                },
+                                {
+                                    "id": f"book_dhow|{name}|{contact}",
+                                    "title": "⛵ Dhow Cruise", 
+                                    "description": "40 OMR per person"
+                                },
+                                {
+                                    "id": f"book_fishing|{name}|{contact}",
+                                    "title": "🎣 Fishing Trip",
+                                    "description": "50 OMR per person"
+                                }
+                            ]
+                        }
+                    ]
+                }
             }
-        }
-    
-    send_whatsapp_message(to, "", interactive_data)
+        
+        # Update session with contact
+        if to in booking_sessions:
+            booking_sessions[to].update({
+                'step': 'awaiting_tour_type',
+                'name': name,
+                'contact': contact
+            })
+        
+        logger.info(f"📋 Sending tour selection to {to}")
+        return send_whatsapp_message(to, "", interactive_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending tour selection: {str(e)}")
+        # Fallback to text
+        if language == 'arabic':
+            fallback_msg = f"""🚤 اختر نوع الجولة {name}
+
+1. 🐬 مشاهدة الدلافين (25 ريال)
+2. 🤿 الغوص (35 ريال)  
+3. ⛵ رحلة القارب (40 ريال)
+4. 🎣 رحلة صيد (50 ريال)
+
+اكتب رقم الجولة."""
+        else:
+            fallback_msg = f"""🚤 Choose Tour Type {name}
+
+1. 🐬 Dolphin Watching (25 OMR)
+2. 🤿 Snorkeling (35 OMR)  
+3. ⛵ Dhow Cruise (40 OMR)
+4. 🎣 Fishing Trip (50 OMR)
+
+Type the number."""
+        
+        return send_whatsapp_message(to, fallback_msg)
 
 def ask_for_adults_count(to, name, contact, tour_type, language='english'):
     """Ask for number of adults"""
@@ -703,136 +834,178 @@ def ask_for_date(to, name, contact, tour_type, adults_count, children_count, lan
     send_whatsapp_message(to, message)
 
 def ask_for_time(to, name, contact, tour_type, adults_count, children_count, booking_date, language='english'):
-    """Ask for preferred time"""
-    total_guests = int(adults_count) + int(children_count)
-    
-    # Update session with date
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_time',
-            'name': name,
-            'contact': contact,
-            'tour_type': tour_type,
-            'adults_count': adults_count,
-            'children_count': children_count,
-            'total_guests': total_guests,
-            'booking_date': booking_date
-        })
-    
-    if language == 'arabic':
-        interactive_data = {
-            "type": "list",
-            "header": {
-                "type": "text",
-                "text": "🕒 الوقت المفضل"
-            },
-            "body": {
-                "text": f"ممتاز! {booking_date} لـ {tour_type}.\n\n{total_guests} ضيوف:\n• {adults_count} بالغين\n• {children_count} أطفال\n\nاختر الوقت المفضل:"
-            },
-            "action": {
-                "button": "اختر الوقت",
-                "sections": [
-                    {
-                        "title": "جولات الصباح",
-                        "rows": [
-                            {
-                                "id": f"time_8am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌅 8:00 صباحاً",
-                                "description": "مغامرة الصباح الباكر"
-                            },
-                            {
-                                "id": f"time_9am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
-                                "title": "☀️ 9:00 صباحاً",
-                                "description": "جولة الصباح"
-                            },
-                            {
-                                "id": f"time_10am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌞 10:00 صباحاً", 
-                                "description": "آخر الصباح"
-                            }
-                        ]
-                    },
-                    {
-                        "title": "جولات الظهيرة",
-                        "rows": [
-                            {
-                                "id": f"time_2pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌇 2:00 ظهراً",
-                                "description": "مغامرة الظهيرة"
-                            },
-                            {
-                                "id": f"time_4pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌅 4:00 عصراً",
-                                "description": "آخر الظهيرة"
-                            },
-                            {
-                                "id": f"time_6pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌆 6:00 مساءً",
-                                "description": "جولة المساء"
-                            }
-                        ]
-                    }
-                ]
+    """Ask for preferred time - FIXED STRUCTURE"""
+    try:
+        total_guests = int(adults_count) + int(children_count)
+        
+        if language == 'arabic':
+            interactive_data = {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": "اختر الوقت"
+                },
+                "body": {
+                    "text": f"{booking_date} لـ {tour_type}\n{total_guests} ضيوف"
+                },
+                "action": {
+                    "button": "اختر الوقت",
+                    "sections": [
+                        {
+                            "title": "جولات الصباح",
+                            "rows": [
+                                {
+                                    "id": f"time_8am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌅 8:00 صباحاً",
+                                    "description": "الصباح الباكر"
+                                },
+                                {
+                                    "id": f"time_9am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
+                                    "title": "☀️ 9:00 صباحاً",
+                                    "description": "جولة الصباح"
+                                },
+                                {
+                                    "id": f"time_10am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌞 10:00 صباحاً", 
+                                    "description": "آخر الصباح"
+                                }
+                            ]
+                        },
+                        {
+                            "title": "جولات الظهيرة",
+                            "rows": [
+                                {
+                                    "id": f"time_2pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌇 2:00 ظهراً",
+                                    "description": "الظهيرة"
+                                },
+                                {
+                                    "id": f"time_4pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌅 4:00 عصراً",
+                                    "description": "العصر"
+                                },
+                                {
+                                    "id": f"time_6pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌆 6:00 مساءً",
+                                    "description": "المساء"
+                                }
+                            ]
+                        }
+                    ]
+                }
             }
-        }
-    else:
-        interactive_data = {
-            "type": "list",
-            "header": {
-                "type": "text",
-                "text": "🕒 Preferred Time"
-            },
-            "body": {
-                "text": f"Perfect! {booking_date} for {tour_type}.\n\n{total_guests} guests:\n• {adults_count} adults\n• {children_count} children\n\nChoose your preferred time:"
-            },
-            "action": {
-                "button": "Select Time",
-                "sections": [
-                    {
-                        "title": "Morning Sessions",
-                        "rows": [
-                            {
-                                "id": f"time_8am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌅 8:00 AM",
-                                "description": "Early morning adventure"
-                            },
-                            {
-                                "id": f"time_9am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
-                                "title": "☀️ 9:00 AM",
-                                "description": "Morning session"
-                            },
-                            {
-                                "id": f"time_10am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌞 10:00 AM", 
-                                "description": "Late morning"
-                            }
-                        ]
-                    },
-                    {
-                        "title": "Afternoon Sessions",
-                        "rows": [
-                            {
-                                "id": f"time_2pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌇 2:00 PM",
-                                "description": "Afternoon adventure"
-                            },
-                            {
-                                "id": f"time_4pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌅 4:00 PM",
-                                "description": "Late afternoon"
-                            },
-                            {
-                                "id": f"time_6pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                                "title": "🌆 6:00 PM",
-                                "description": "Evening session"
-                            }
-                        ]
-                    }
-                ]
+        else:
+            interactive_data = {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": "Choose Time"
+                },
+                "body": {
+                    "text": f"{booking_date} for {tour_type}\n{total_guests} guests"
+                },
+                "action": {
+                    "button": "Select Time",
+                    "sections": [
+                        {
+                            "title": "Morning Sessions",
+                            "rows": [
+                                {
+                                    "id": f"time_8am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌅 8:00 AM",
+                                    "description": "Early morning"
+                                },
+                                {
+                                    "id": f"time_9am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
+                                    "title": "☀️ 9:00 AM",
+                                    "description": "Morning"
+                                },
+                                {
+                                    "id": f"time_10am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌞 10:00 AM", 
+                                    "description": "Late morning"
+                                }
+                            ]
+                        },
+                        {
+                            "title": "Afternoon Sessions",
+                            "rows": [
+                                {
+                                    "id": f"time_2pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌇 2:00 PM",
+                                    "description": "Afternoon"
+                                },
+                                {
+                                    "id": f"time_4pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌅 4:00 PM",
+                                    "description": "Late afternoon"
+                                },
+                                {
+                                    "id": f"time_6pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                    "title": "🌆 6:00 PM",
+                                    "description": "Evening"
+                                }
+                            ]
+                        }
+                    ]
+                }
             }
-        }
-    
-    send_whatsapp_message(to, "", interactive_data)
+        
+        # Update session with date
+        if to in booking_sessions:
+            booking_sessions[to].update({
+                'step': 'awaiting_time',
+                'name': name,
+                'contact': contact,
+                'tour_type': tour_type,
+                'adults_count': adults_count,
+                'children_count': children_count,
+                'total_guests': total_guests,
+                'booking_date': booking_date
+            })
+        
+        logger.info(f"📋 Sending time selection to {to}")
+        return send_whatsapp_message(to, "", interactive_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error sending time selection: {str(e)}")
+        # Fallback to text
+        if language == 'arabic':
+            fallback_msg = f"""🕒 اختر الوقت المفضل
+
+{booking_date} لـ {tour_type}
+{total_guests} ضيوف
+
+جولات الصباح:
+1. 🌅 8:00 صباحاً
+2. ☀️ 9:00 صباحاً  
+3. 🌞 10:00 صباحاً
+
+جولات الظهيرة:
+4. 🌇 2:00 ظهراً
+5. 🌅 4:00 عصراً
+6. 🌆 6:00 مساءً
+
+اكتب رقم الوقت."""
+        else:
+            fallback_msg = f"""🕒 Choose Preferred Time
+
+{booking_date} for {tour_type}
+{total_guests} guests
+
+Morning Sessions:
+1. 🌅 8:00 AM
+2. ☀️ 9:00 AM  
+3. 🌞 10:00 AM
+
+Afternoon Sessions:
+4. 🌇 2:00 PM
+5. 🌅 4:00 PM
+6. 🌆 6:00 PM
+
+Type the number."""
+        
+        return send_whatsapp_message(to, fallback_msg)
 
 def complete_booking(to, name, contact, tour_type, adults_count, children_count, booking_date, booking_time, language='english'):
     """Complete the booking and save to sheet"""
@@ -1723,7 +1896,7 @@ def health():
         "chat_messages_stored": sum(len(msgs) for msgs in chat_messages.values()),
         "unique_chat_users": len(chat_messages),
         "admin_conversations_tracked": len(admin_message_tracker),
-        "version": "13.0 - Interactive Lists Restored & Enhanced"
+        "version": "14.0 - WhatsApp API Compliant Interactive Lists"
     }
     return jsonify(status)
 
