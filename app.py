@@ -46,14 +46,14 @@ try:
     # Ensure the sheet has the right columns
     try:
         current_headers = sheet.row_values(1)
-        required_headers = ['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests']
+        required_headers = ['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests', 'Language']
         if current_headers != required_headers:
             sheet.clear()
             sheet.append_row(required_headers)
             logger.info("✅ Updated Google Sheets headers")
     except:
         # If sheet is empty, add headers
-        sheet.append_row(['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests'])
+        sheet.append_row(['Timestamp', 'Name', 'Contact', 'WhatsApp ID', 'Intent', 'Tour Type', 'Booking Date', 'Booking Time', 'Adults Count', 'Children Count', 'Total Guests', 'Language'])
     
     logger.info("✅ Google Sheets initialized successfully")
 except Exception as e:
@@ -67,6 +67,9 @@ booking_sessions = {}
 # MESSAGE STORAGE FOR TWO-WAY CHAT - ENHANCED
 # ==============================
 chat_messages = {}  # Format: { phone_number: [ {message, sender, timestamp}, ... ] }
+
+# Track admin messages to prevent bot responses to admin-initiated conversations
+admin_message_tracker = {}
 
 def store_message(phone_number, message, sender):
     """Store message in chat history with proper formatting"""
@@ -135,15 +138,128 @@ def get_all_chat_users():
         return []
 
 # ==============================
+# ARABIC LANGUAGE SUPPORT
+# ==============================
+
+# Arabic translations for all bot messages
+ARABIC_MESSAGES = {
+    "welcome": "🌊 مرحباً بكم في جولات البحر للرحلات البحرية!\n\nاختر لغتك المفضلة / Choose your preferred language:",
+    
+    "booking_start": "📝 *لنحجز رحلتك!* 🎫\n\nسأساعدك في حجز رحلتك البحرية. 🌊\n\nأولاً، الرجاء إرسال:\n\n👤 *الاسم الكامل*\n\n*مثال:*\nأحمد الحارثي",
+    
+    "ask_contact": "ممتاز، {}! 👋\n\nالآن الرجاء إرسال:\n\n📞 *رقم الهاتف*\n\n*مثال:*\n91234567",
+    
+    "ask_adults": "👥 *عدد البالغين*\n\nاختيار رائع! {} سيكون! 🎯\n\nكم عدد *البالغين* (12 سنة فما فوق) الذين سينضمون؟\n\nالرجاء إرسال الرقم:\n*أمثلة:* 2, 4, 6",
+    
+    "ask_children": "👶 *عدد الأطفال*\n\nالبالغين: {}\n\nكم عدد *الأطفال* (أقل من 12 سنة) الذين سينضمون؟\n\nالرجاء إرسال الرقم:\n*أمثلة:* 0, 1, 2\n\nإذا لم يكن هناك أطفال، أرسل فقط: 0",
+    
+    "ask_date": "📅 *التاريخ المفضل*\n\nممتاز! {} ضيوف إجمالاً:\n• {} بالغين\n• {} أطفال\n\nالرجاء إرسال *التاريخ المفضل*:\n\n📋 *أمثلة على التنسيق:*\n• **غداً**\n• **29 أكتوبر**\n• **الجمعة القادمة**\n• **15 نوفمبر**\n• **2024-12-25**\n\nسنتحقق من التوفر لتاريخك المختار! 📅",
+    
+    "booking_complete": "🎉 *تم تأكيد الحجز!* ✅\n\nشكراً {}! تم حجز رحلتك بنجاح. 🐬\n\n📋 *تفاصيل الحجز:*\n👤 الاسم: {}\n📞 الاتصال: {}\n🚤 الجولة: {}\n👥 الضيوف: {} إجمالاً\n   • {} بالغين\n   • {} أطفال\n📅 التاريخ: {}\n🕒 الوقت: {}\n\n💰 *المجموع: {} ريال عماني*\n\nسيتصل بك فريقنا خلال ساعة واحدة لتأكيد التفاصيل. ⏰\nللمساعدة الفورية: +968 24 123456 📞\n\nاستعد لمغامرة بحرية رائعة! 🌊",
+    
+    "tour_descriptions": {
+        "Dolphin Watching": "🐬 *جولة مشاهدة الدلافين* 🌊\n\n*جولة لمدة ساعتين - 25 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• مرشد بحري خبير 🧭\n• معدات السلامة 🦺\n• المرطبات والمياه 🥤\n• فرص التصوير 📸\n\n*أفضل وقت:* جولات الصباح (8 صباحاً، 10 صباحاً)",
+        "Snorkeling": "🤿 *مغامرة الغوص* 🐠\n\n*جولة لمدة 3 ساعات - 35 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• معدات الغوص الكاملة 🤿\n• مرشد محترف 🧭\n• معدات السلامة 🦺\n• وجبات خفيفة ومرطبات 🍎🥤",
+        "Dhow Cruise": "⛵ *رحلة القارب التقليدي* 🌅\n\n*جولة لمدة ساعتين - 40 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمول:*\n• رحلة قارب عماني تقليدي ⛵\n• مشاهد الغروب 🌅\n• عشاء عماني 🍽️\n• مشروبات 🥤",
+        "Fishing Trip": "🎣 *رحلة صيد* 🐟\n\n*جولة لمدة 4 ساعات - 50 ريال عماني للبالغ*\n(خصم 50٪ للأطفال تحت 12 سنة)\n\n*المشمOL:*\n• معدات الصيد المحترفة 🎣\n• الطعم 🪱\n• مرشد صيد خبير 🧭\n• مرطبات ووجبات خفيفة 🥤🍎"
+    },
+    
+    "pricing": "💰 *أسعار الجولات والباقات* 💵\n\n🐬 *مشاهدة الدلافين:* 25 ريال عماني للبالغ\n🤿 *الغوص:* 35 ريال عماني للبالغ\n⛵ *رحلة القارب:* 40 ريال عماني للبالغ\n🎣 *رحلة الصيد:* 50 ريال عماني للبالغ\n\n👨‍👩‍👧‍👦 *عروض خاصة:*\n• الأطفال تحت 12 سنة: خصم 50٪\n• مجموعة 4+ أشخاص: خصم 10٪",
+    
+    "location": "📍 *موقعنا والتوجيهات* 🗺️\n\n🏖️ *جولات البحر للرحلات البحرية*\nمارينا بندر الروضة\nمسقط، سلطنة عمان\n\n🗺️ *خرائط جوجل:*\nhttps://maps.app.goo.gl/albahrseatours\n\n🚗 *مواقف سيارات:* متوفرة في المارينا\n⏰ *ساعات العمل:* 7:00 صباحاً - 7:00 مساءً يومياً"
+}
+
+# Arabic to English mapping for common responses
+ARABIC_TO_ENGLISH = {
+    # Common names
+    "أحمد": "Ahmed",
+    "محمد": "Mohammed", 
+    "خالد": "Khalid",
+    "مريم": "Maryam",
+    "فاطمة": "Fatima",
+    
+    # Common responses
+    "نعم": "Yes",
+    "لا": "No",
+    "غداً": "Tomorrow",
+    "بكرا": "Tomorrow",
+    "اليوم": "Today"
+}
+
+def translate_arabic_to_english(text):
+    """Simple Arabic to English translation for common words/phrases"""
+    if not text or not any('\u0600' <= char <= '\u06FF' for char in text):
+        return text  # Return as is if no Arabic characters
+    
+    # Simple word-by-word translation
+    words = text.split()
+    translated_words = []
+    
+    for word in words:
+        # Remove any punctuation for matching
+        clean_word = re.sub(r'[^\w\u0600-\u06FF]', '', word)
+        if clean_word in ARABIC_TO_ENGLISH:
+            translated_words.append(ARABIC_TO_ENGLISH[clean_word])
+        else:
+            translated_words.append(word)
+    
+    return ' '.join(translated_words)
+
+def get_user_language(phone_number):
+    """Get user's preferred language from session"""
+    session = booking_sessions.get(phone_number, {})
+    return session.get('language', 'english')
+
+def send_language_selection(to):
+    """Send language selection menu"""
+    interactive_data = {
+        "type": "list",
+        "header": {
+            "type": "text",
+            "text": "🌊 Al Bahr Sea Tours"
+        },
+        "body": {
+            "text": ARABIC_MESSAGES["welcome"]
+        },
+        "action": {
+            "button": "🌐 Select Language",
+            "sections": [
+                {
+                    "title": "Choose Language / اختر اللغة",
+                    "rows": [
+                        {
+                            "id": "lang_english",
+                            "title": "🇺🇸 English",
+                            "description": "Continue in English"
+                        },
+                        {
+                            "id": "lang_arabic", 
+                            "title": "🇴🇲 العربية",
+                            "description": "المتابعة باللغة العربية"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    send_whatsapp_message(to, "", interactive_data)
+
+# ==============================
 # HELPER FUNCTIONS
 # ==============================
 
-def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", adults_count="0", children_count="0", total_guests="0"):
+def add_lead_to_sheet(name, contact, intent, whatsapp_id, tour_type="Not specified", booking_date="Not specified", booking_time="Not specified", adults_count="0", children_count="0", total_guests="0", language="english"):
     """Add user entry to Google Sheet"""
     try:
+        # Translate Arabic inputs to English for sheet storage
+        translated_name = translate_arabic_to_english(name)
+        translated_tour_type = translate_arabic_to_english(tour_type)
+        translated_booking_date = translate_arabic_to_english(booking_date)
+        
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        sheet.append_row([timestamp, name, contact, whatsapp_id, intent, tour_type, booking_date, booking_time, adults_count, children_count, total_guests])
-        logger.info(f"✅ Added lead to sheet: {name}, {contact}, {intent}, Adults: {adults_count}, Children: {children_count}")
+        sheet.append_row([timestamp, translated_name, contact, whatsapp_id, intent, translated_tour_type, translated_booking_date, booking_time, adults_count, children_count, total_guests, language])
+        logger.info(f"✅ Added lead to sheet: {translated_name}, {contact}, {intent}, Language: {language}")
         return True
     except Exception as e:
         logger.error(f"❌ Failed to add lead to sheet: {str(e)}")
@@ -222,12 +338,15 @@ def clean_oman_number(number):
     
     return None
 
-def send_welcome_message(to):
-    """Send initial welcome message with direct tour list"""
-    send_main_options_list(to)
+def send_welcome_message(to, language='english'):
+    """Send appropriate welcome message based on language"""
+    if language == 'arabic':
+        send_main_options_list_arabic(to)
+    else:
+        send_main_options_list(to)
 
 def send_main_options_list(to):
-    """Send ALL options in one list - This is now the main menu"""
+    """Send ALL options in one list - English version"""
     interactive_data = {
         "type": "list",
         "header": {
@@ -301,87 +420,72 @@ def send_main_options_list(to):
     
     send_whatsapp_message(to, "", interactive_data)
 
-def start_booking_flow(to):
-    """Start the booking flow by asking for name"""
-    # Clear any existing session
-    if to in booking_sessions:
-        del booking_sessions[to]
-    
-    # Create new session
-    booking_sessions[to] = {
-        'step': 'awaiting_name',
-        'flow': 'booking',
-        'created_at': datetime.datetime.now().isoformat()
-    }
-    
-    send_whatsapp_message(to, 
-        "📝 *Let's Book Your Tour!* 🎫\n\n"
-        "I'll help you book your sea adventure. 🌊\n\n"
-        "First, please send me your:\n\n"
-        "👤 *Full Name*\n\n"
-        "*Example:*\n"
-        "Ahmed Al Harthy")
-
-def ask_for_contact(to, name):
-    """Ask for contact after getting name"""
-    # Update session with name
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_contact',
-            'name': name
-        })
-    
-    send_whatsapp_message(to, 
-        f"Perfect, {name}! 👋\n\n"
-        "Now please send me your:\n\n"
-        "📞 *Phone Number*\n\n"
-        "*Example:*\n"
-        "91234567")
-
-def ask_for_tour_type(to, name, contact):
-    """Ask for tour type using interactive list"""
-    # Update session with contact
-    if to in booking_sessions:
-        booking_sessions[to].update({
-            'step': 'awaiting_tour_type',
-            'name': name,
-            'contact': contact
-        })
-    
+def send_main_options_list_arabic(to):
+    """Send ALL options in one list - Arabic version"""
     interactive_data = {
         "type": "list",
         "header": {
             "type": "text",
-            "text": "🚤 Choose Your Tour"
+            "text": "🌊 جولات البحر للرحلات البحرية"
         },
         "body": {
-            "text": f"Great {name}! Which tour would you like to book?"
+            "text": "مرحباً بكم في شركة عمان الرائدة في المغامرات البحرية! 🚤\n\nاختر مغامرتك البحرية: 🗺️"
         },
         "action": {
-            "button": "Select Tour",
+            "button": "🌊 عرض الجولات",
             "sections": [
                 {
-                    "title": "Available Tours",
+                    "title": "🚤 الجولات الشعبية",
                     "rows": [
                         {
-                            "id": f"book_dolphin|{name}|{contact}",
-                            "title": "🐬 Dolphin Watching",
-                            "description": "2 hours • 25 OMR per person"
+                            "id": "dolphin_tour_ar",
+                            "title": "🐬 مشاهدة الدلافين",
+                            "description": "السباحة مع الدلافين في بيئتها الطبيعية"
                         },
                         {
-                            "id": f"book_snorkeling|{name}|{contact}", 
-                            "title": "🤿 Snorkeling",
-                            "description": "3 hours • 35 OMR per person"
+                            "id": "snorkeling_ar", 
+                            "title": "🤿 الغوص",
+                            "description": "استكشاف الشعاب المرجانية والحياة البحرية"
                         },
                         {
-                            "id": f"book_dhow|{name}|{contact}",
-                            "title": "⛵ Dhow Cruise", 
-                            "description": "2 hours • 40 OMR per person"
+                            "id": "dhow_cruise_ar",
+                            "title": "⛵ رحلة القارب", 
+                            "description": "تجربة غروب الشمس على القارب العماني التقليدي"
                         },
                         {
-                            "id": f"book_fishing|{name}|{contact}",
-                            "title": "🎣 Fishing Trip",
-                            "description": "4 hours • 50 OMR per person"
+                            "id": "fishing_ar",
+                            "title": "🎣 رحلة صيد",
+                            "description": "مغامرة صيد في أعماق البحر"
+                        }
+                    ]
+                },
+                {
+                    "title": "ℹ️ المعلومات والحجز",
+                    "rows": [
+                        {
+                            "id": "pricing_ar",
+                            "title": "💰 الأسعار",
+                            "description": "أسعار الجولات والباقات"
+                        },
+                        {
+                            "id": "location_ar",
+                            "title": "📍 الموقع",
+                            "description": "عنوان المارينا والتوجيهات"
+                        },
+                        {
+                            "id": "schedule_ar",
+                            "title": "🕒 الجدول",
+                            "description": "مواعيد الجولات والتوفر"
+                        },
+                        {
+                            "id": "contact_ar",
+                            "title": "📞 اتصل بنا",
+                            "description": "تواصل مع فريقنا"
+                        },
+                        {
+                            "id": "book_now_ar",
+                            "title": "📅 احجز الآن", 
+                            "description": "احجز مغامرتك البحرية"
                         }
                     ]
                 }
@@ -391,7 +495,139 @@ def ask_for_tour_type(to, name, contact):
     
     send_whatsapp_message(to, "", interactive_data)
 
-def ask_for_adults_count(to, name, contact, tour_type):
+def start_booking_flow(to, language='english'):
+    """Start the booking flow by asking for name"""
+    # Clear any existing session
+    if to in booking_sessions:
+        del booking_sessions[to]
+    
+    # Create new session
+    booking_sessions[to] = {
+        'step': 'awaiting_name',
+        'flow': 'booking',
+        'language': language,
+        'created_at': datetime.datetime.now().isoformat()
+    }
+    
+    if language == 'arabic':
+        message = ARABIC_MESSAGES["booking_start"]
+    else:
+        message = "📝 *Let's Book Your Tour!* 🎫\n\nI'll help you book your sea adventure. 🌊\n\nFirst, please send me your:\n\n👤 *Full Name*\n\n*Example:*\nAhmed Al Harthy"
+    
+    send_whatsapp_message(to, message)
+
+def ask_for_contact(to, name, language='english'):
+    """Ask for contact after getting name"""
+    # Update session with name
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_contact',
+            'name': name
+        })
+    
+    if language == 'arabic':
+        message = ARABIC_MESSAGES["ask_contact"].format(name)
+    else:
+        message = f"Perfect, {name}! 👋\n\nNow please send me your:\n\n📞 *Phone Number*\n\n*Example:*\n91234567"
+    
+    send_whatsapp_message(to, message)
+
+def ask_for_tour_type(to, name, contact, language='english'):
+    """Ask for tour type using interactive list"""
+    # Update session with contact
+    if to in booking_sessions:
+        booking_sessions[to].update({
+            'step': 'awaiting_tour_type',
+            'name': name,
+            'contact': contact
+        })
+    
+    if language == 'arabic':
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "🚤 اختر جولتك"
+            },
+            "body": {
+                "text": f"ممتاز {name}! أي جولة تريد حجزها؟"
+            },
+            "action": {
+                "button": "اختر الجولة",
+                "sections": [
+                    {
+                        "title": "الجولات المتاحة",
+                        "rows": [
+                            {
+                                "id": f"book_dolphin_ar|{name}|{contact}",
+                                "title": "🐬 مشاهدة الدلافين",
+                                "description": "ساعتين • 25 ريال عماني للشخص"
+                            },
+                            {
+                                "id": f"book_snorkeling_ar|{name}|{contact}", 
+                                "title": "🤿 الغوص",
+                                "description": "3 ساعات • 35 ريال عماني للشخص"
+                            },
+                            {
+                                "id": f"book_dhow_ar|{name}|{contact}",
+                                "title": "⛵ رحلة القارب", 
+                                "description": "ساعتين • 40 ريال عماني للشخص"
+                            },
+                            {
+                                "id": f"book_fishing_ar|{name}|{contact}",
+                                "title": "🎣 رحلة صيد",
+                                "description": "4 ساعات • 50 ريال عماني للشخص"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    else:
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "🚤 Choose Your Tour"
+            },
+            "body": {
+                "text": f"Great {name}! Which tour would you like to book?"
+            },
+            "action": {
+                "button": "Select Tour",
+                "sections": [
+                    {
+                        "title": "Available Tours",
+                        "rows": [
+                            {
+                                "id": f"book_dolphin|{name}|{contact}",
+                                "title": "🐬 Dolphin Watching",
+                                "description": "2 hours • 25 OMR per person"
+                            },
+                            {
+                                "id": f"book_snorkeling|{name}|{contact}", 
+                                "title": "🤿 Snorkeling",
+                                "description": "3 hours • 35 OMR per person"
+                            },
+                            {
+                                "id": f"book_dhow|{name}|{contact}",
+                                "title": "⛵ Dhow Cruise", 
+                                "description": "2 hours • 40 OMR per person"
+                            },
+                            {
+                                "id": f"book_fishing|{name}|{contact}",
+                                "title": "🎣 Fishing Trip",
+                                "description": "4 hours • 50 OMR per person"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    
+    send_whatsapp_message(to, "", interactive_data)
+
+def ask_for_adults_count(to, name, contact, tour_type, language='english'):
     """Ask for number of adults"""
     # Update session with tour type
     if to in booking_sessions:
@@ -402,14 +638,14 @@ def ask_for_adults_count(to, name, contact, tour_type):
             'tour_type': tour_type
         })
     
-    send_whatsapp_message(to,
-        f"👥 *Number of Adults*\n\n"
-        f"Great choice! {tour_type} it is! 🎯\n\n"
-        "How many *adults* (12 years and above) will be joining?\n\n"
-        "Please send the number:\n"
-        "*Examples:* 2, 4, 6")
+    if language == 'arabic':
+        message = ARABIC_MESSAGES["ask_adults"].format(tour_type)
+    else:
+        message = f"👥 *Number of Adults*\n\nGreat choice! {tour_type} it is! 🎯\n\nHow many *adults* (12 years and above) will be joining?\n\nPlease send the number:\n*Examples:* 2, 4, 6"
+    
+    send_whatsapp_message(to, message)
 
-def ask_for_children_count(to, name, contact, tour_type, adults_count):
+def ask_for_children_count(to, name, contact, tour_type, adults_count, language='english'):
     """Ask for number of children"""
     # Update session with adults count
     if to in booking_sessions:
@@ -421,15 +657,14 @@ def ask_for_children_count(to, name, contact, tour_type, adults_count):
             'adults_count': adults_count
         })
     
-    send_whatsapp_message(to,
-        f"👶 *Number of Children*\n\n"
-        f"Adults: {adults_count}\n\n"
-        "How many *children* (below 12 years) will be joining?\n\n"
-        "Please send the number:\n"
-        "*Examples:* 0, 1, 2\n\n"
-        "If no children, just send: 0")
+    if language == 'arabic':
+        message = ARABIC_MESSAGES["ask_children"].format(adults_count)
+    else:
+        message = f"👶 *Number of Children*\n\nAdults: {adults_count}\n\nHow many *children* (below 12 years) will be joining?\n\nPlease send the number:\n*Examples:* 0, 1, 2\n\nIf no children, just send: 0"
+    
+    send_whatsapp_message(to, message)
 
-def ask_for_date(to, name, contact, tour_type, adults_count, children_count):
+def ask_for_date(to, name, contact, tour_type, adults_count, children_count, language='english'):
     """Ask for preferred date"""
     # Calculate total guests
     total_guests = int(adults_count) + int(children_count)
@@ -446,21 +681,14 @@ def ask_for_date(to, name, contact, tour_type, adults_count, children_count):
             'total_guests': total_guests
         })
     
-    send_whatsapp_message(to,
-        f"📅 *Preferred Date*\n\n"
-        f"Perfect! {total_guests} guests total:\n"
-        f"• {adults_count} adults\n"
-        f"• {children_count} children\n\n"
-        "Please send your *preferred date*:\n\n"
-        "📋 *Format Examples:*\n"
-        "• **Tomorrow**\n"
-        "• **October 29**\n" 
-        "• **Next Friday**\n"
-        "• **15 November**\n"
-        "• **2024-12-25**\n\n"
-        "We'll check availability for your chosen date! 📅")
+    if language == 'arabic':
+        message = ARABIC_MESSAGES["ask_date"].format(total_guests, adults_count, children_count)
+    else:
+        message = f"📅 *Preferred Date*\n\nPerfect! {total_guests} guests total:\n• {adults_count} adults\n• {children_count} children\n\nPlease send your *preferred date*:\n\n📋 *Format Examples:*\n• **Tomorrow**\n• **October 29**\n• **Next Friday**\n• **15 November**\n• **2024-12-25**\n\nWe'll check availability for your chosen date! 📅"
+    
+    send_whatsapp_message(to, message)
 
-def ask_for_time(to, name, contact, tour_type, adults_count, children_count, booking_date):
+def ask_for_time(to, name, contact, tour_type, adults_count, children_count, booking_date, language='english'):
     """Ask for preferred time"""
     total_guests = int(adults_count) + int(children_count)
     
@@ -477,65 +705,122 @@ def ask_for_time(to, name, contact, tour_type, adults_count, children_count, boo
             'booking_date': booking_date
         })
     
-    interactive_data = {
-        "type": "list",
-        "header": {
-            "type": "text",
-            "text": "🕒 Preferred Time"
-        },
-        "body": {
-            "text": f"Perfect! {booking_date} for {tour_type}.\n\n{total_guests} guests:\n• {adults_count} adults\n• {children_count} children\n\nChoose your preferred time:"
-        },
-        "action": {
-            "button": "Select Time",
-            "sections": [
-                {
-                    "title": "Morning Sessions",
-                    "rows": [
-                        {
-                            "id": f"time_8am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌅 8:00 AM",
-                            "description": "Early morning adventure"
-                        },
-                        {
-                            "id": f"time_9am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
-                            "title": "☀️ 9:00 AM",
-                            "description": "Morning session"
-                        },
-                        {
-                            "id": f"time_10am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌞 10:00 AM", 
-                            "description": "Late morning"
-                        }
-                    ]
-                },
-                {
-                    "title": "Afternoon Sessions",
-                    "rows": [
-                        {
-                            "id": f"time_2pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌇 2:00 PM",
-                            "description": "Afternoon adventure"
-                        },
-                        {
-                            "id": f"time_4pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌅 4:00 PM",
-                            "description": "Late afternoon"
-                        },
-                        {
-                            "id": f"time_6pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
-                            "title": "🌆 6:00 PM",
-                            "description": "Evening session"
-                        }
-                    ]
-                }
-            ]
+    if language == 'arabic':
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "🕒 الوقت المفضل"
+            },
+            "body": {
+                "text": f"ممتاز! {booking_date} لـ {tour_type}.\n\n{total_guests} ضيوف:\n• {adults_count} بالغين\n• {children_count} أطفال\n\nاختر الوقت المفضل:"
+            },
+            "action": {
+                "button": "اختر الوقت",
+                "sections": [
+                    {
+                        "title": "جولات الصباح",
+                        "rows": [
+                            {
+                                "id": f"time_8am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌅 8:00 صباحاً",
+                                "description": "مغامرة الصباح الباكر"
+                            },
+                            {
+                                "id": f"time_9am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
+                                "title": "☀️ 9:00 صباحاً",
+                                "description": "جولة الصباح"
+                            },
+                            {
+                                "id": f"time_10am_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌞 10:00 صباحاً", 
+                                "description": "آخر الصباح"
+                            }
+                        ]
+                    },
+                    {
+                        "title": "جولات الظهيرة",
+                        "rows": [
+                            {
+                                "id": f"time_2pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌇 2:00 ظهراً",
+                                "description": "مغامرة الظهيرة"
+                            },
+                            {
+                                "id": f"time_4pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌅 4:00 عصراً",
+                                "description": "آخر الظهيرة"
+                            },
+                            {
+                                "id": f"time_6pm_ar|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌆 6:00 مساءً",
+                                "description": "جولة المساء"
+                            }
+                        ]
+                    }
+                ]
+            }
         }
-    }
+    else:
+        interactive_data = {
+            "type": "list",
+            "header": {
+                "type": "text",
+                "text": "🕒 Preferred Time"
+            },
+            "body": {
+                "text": f"Perfect! {booking_date} for {tour_type}.\n\n{total_guests} guests:\n• {adults_count} adults\n• {children_count} children\n\nChoose your preferred time:"
+            },
+            "action": {
+                "button": "Select Time",
+                "sections": [
+                    {
+                        "title": "Morning Sessions",
+                        "rows": [
+                            {
+                                "id": f"time_8am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌅 8:00 AM",
+                                "description": "Early morning adventure"
+                            },
+                            {
+                                "id": f"time_9am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}", 
+                                "title": "☀️ 9:00 AM",
+                                "description": "Morning session"
+                            },
+                            {
+                                "id": f"time_10am|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌞 10:00 AM", 
+                                "description": "Late morning"
+                            }
+                        ]
+                    },
+                    {
+                        "title": "Afternoon Sessions",
+                        "rows": [
+                            {
+                                "id": f"time_2pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌇 2:00 PM",
+                                "description": "Afternoon adventure"
+                            },
+                            {
+                                "id": f"time_4pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌅 4:00 PM",
+                                "description": "Late afternoon"
+                            },
+                            {
+                                "id": f"time_6pm|{name}|{contact}|{tour_type}|{adults_count}|{children_count}|{booking_date}",
+                                "title": "🌆 6:00 PM",
+                                "description": "Evening session"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
     
     send_whatsapp_message(to, "", interactive_data)
 
-def complete_booking(to, name, contact, tour_type, adults_count, children_count, booking_date, booking_time):
+def complete_booking(to, name, contact, tour_type, adults_count, children_count, booking_date, booking_time, language='english'):
     """Complete the booking and save to sheet"""
     total_guests = int(adults_count) + int(children_count)
     
@@ -550,7 +835,8 @@ def complete_booking(to, name, contact, tour_type, adults_count, children_count,
         booking_time=booking_time,
         adults_count=adults_count,
         children_count=children_count,
-        total_guests=str(total_guests)
+        total_guests=str(total_guests),
+        language=language
     )
     
     # Clear the session
@@ -558,37 +844,20 @@ def complete_booking(to, name, contact, tour_type, adults_count, children_count,
         del booking_sessions[to]
     
     # Send confirmation message
-    if success:
-        send_whatsapp_message(to,
-            f"🎉 *Booking Confirmed!* ✅\n\n"
-            f"Thank you {name}! Your tour has been booked successfully. 🐬\n\n"
-            f"📋 *Booking Details:*\n"
-            f"👤 Name: {name}\n"
-            f"📞 Contact: {contact}\n"
-            f"🚤 Tour: {tour_type}\n"
-            f"👥 Guests: {total_guests} total\n"
-            f"   • {adults_count} adults\n"
-            f"   • {children_count} children\n"
-            f"📅 Date: {booking_date}\n"
-            f"🕒 Time: {booking_time}\n\n"
-            f"💰 *Total: {calculate_price(tour_type, adults_count, children_count)} OMR*\n\n"
-            f"Our team will contact you within 1 hour to confirm details. ⏰\n"
-            f"For immediate assistance: +968 24 123456 📞\n\n"
-            f"Get ready for an amazing sea adventure! 🌊")
+    price = calculate_price(tour_type, adults_count, children_count)
+    
+    if language == 'arabic':
+        if success:
+            message = ARABIC_MESSAGES["booking_complete"].format(name, name, contact, tour_type, total_guests, adults_count, children_count, booking_date, booking_time, price)
+        else:
+            message = f"📝 *تم استلام الحجز!*\n\nشكراً {name}! لقد استلمنا طلب حجزك. 🐬\n\nسيتصل بك فريقنا خلال ساعة واحدة للتأكيد. 📞"
     else:
-        send_whatsapp_message(to,
-            f"📝 *Booking Received!*\n\n"
-            f"Thank you {name}! We've received your booking request. 🐬\n\n"
-            f"📋 *Your Details:*\n"
-            f"👤 Name: {name}\n"
-            f"📞 Contact: {contact}\n"
-            f"🚤 Tour: {tour_type}\n"
-            f"👥 Guests: {total_guests} total\n"
-            f"   • {adults_count} adults\n"
-            f"   • {children_count} children\n"
-            f"📅 Date: {booking_date}\n"
-            f"🕒 Time: {booking_time}\n\n"
-            f"Our team will contact you within 1 hour to confirm. 📞")
+        if success:
+            message = f"🎉 *Booking Confirmed!* ✅\n\nThank you {name}! Your tour has been booked successfully. 🐬\n\n📋 *Booking Details:*\n👤 Name: {name}\n📞 Contact: {contact}\n🚤 Tour: {tour_type}\n👥 Guests: {total_guests} total\n   • {adults_count} adults\n   • {children_count} children\n📅 Date: {booking_date}\n🕒 Time: {booking_time}\n\n💰 *Total: {price} OMR*\n\nOur team will contact you within 1 hour to confirm details. ⏰\nFor immediate assistance: +968 24 123456 📞\n\nGet ready for an amazing sea adventure! 🌊"
+        else:
+            message = f"📝 *Booking Received!*\n\nThank you {name}! We've received your booking request. 🐬\n\n📋 *Your Details:*\n👤 Name: {name}\n📞 Contact: {contact}\n🚤 Tour: {tour_type}\n👥 Guests: {total_guests} total\n   • {adults_count} adults\n   • {children_count} children\n📅 Date: {booking_date}\n🕒 Time: {booking_time}\n\nOur team will contact you within 1 hour to confirm. 📞"
+    
+    send_whatsapp_message(to, message)
 
 def calculate_price(tour_type, adults_count, children_count):
     """Calculate tour price based on type and people count"""
@@ -596,7 +865,11 @@ def calculate_price(tour_type, adults_count, children_count):
         "Dolphin Watching": 25,
         "Snorkeling": 35,
         "Dhow Cruise": 40,
-        "Fishing Trip": 50
+        "Fishing Trip": 50,
+        "مشاهدة الدلافين": 25,
+        "الغوص": 35,
+        "رحلة القارب": 40,
+        "رحلة صيد": 50
     }
     
     base_price = prices.get(tour_type, 30)
@@ -615,13 +888,16 @@ def calculate_price(tour_type, adults_count, children_count):
     
     return f"{total_price:.2f}"
 
-def handle_keyword_questions(text, phone_number):
+def handle_keyword_questions(text, phone_number, language='english'):
     """Handle direct keyword questions without menu"""
     text_lower = text.lower()
     
     # Location questions
-    if any(word in text_lower for word in ['where', 'location', 'address', 'located', 'map']):
-        response = """📍 *Our Location:* 🌊
+    if any(word in text_lower for word in ['where', 'location', 'address', 'located', 'map', 'اين', 'موقع', 'عنوان']):
+        if language == 'arabic':
+            response = ARABIC_MESSAGES["location"]
+        else:
+            response = """📍 *Our Location:* 🌊
 
 🏖️ *Al Bahr Sea Tours*
 Marina Bandar Al Rowdha
@@ -638,8 +914,11 @@ We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
         return True
     
     # Price questions
-    elif any(word in text_lower for word in ['price', 'cost', 'how much', 'fee', 'charge']):
-        response = """💰 *Tour Prices & Packages:* 💵
+    elif any(word in text_lower for word in ['price', 'cost', 'how much', 'fee', 'charge', 'سعر', 'كم', 'ثمن', 'تكلفة']):
+        if language == 'arabic':
+            response = ARABIC_MESSAGES["pricing"]
+        else:
+            response = """💰 *Tour Prices & Packages:* 💵
 
 🐬 *Dolphin Watching Tour:*
 • 2 hours • 25 OMR per adult
@@ -668,8 +947,22 @@ We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
         return True
     
     # Timing questions
-    elif any(word in text_lower for word in ['time', 'schedule', 'hour', 'when', 'available']):
-        response = """🕒 *Tour Schedule & Timings:* ⏰
+    elif any(word in text_lower for word in ['time', 'schedule', 'hour', 'when', 'available', 'وقت', 'موعد', 'جدول', 'متى']):
+        if language == 'arabic':
+            response = """🕒 *جدول الجولات والمواعيد:* ⏰
+
+*مواعيد انطلاق الجولات اليومية:*
+🌅 *جولات الصباح:*
+• مشاهدة الدلافين: 8:00 صباحاً، 10:00 صباحاً
+• الغوص: 9:00 صباحاً، 11:00 صباحاً
+
+🌇 *جولات الظهيرة:*
+• رحلات الصيد: 2:00 ظهراً
+• رحلات القارب: 4:00 عصراً، 6:00 مساءً
+
+📅 *يوصى بالحجز المسبق!*"""
+        else:
+            response = """🕒 *Tour Schedule & Timings:* ⏰
 
 *Daily Tour Departures:*
 🌅 *Morning Sessions:*
@@ -685,8 +978,23 @@ We're located at the beautiful Bandar Al Rowdha Marina! 🚤"""
         return True
     
     # Contact questions
-    elif any(word in text_lower for word in ['contact', 'phone', 'call', 'number', 'whatsapp']):
-        response = """📞 *Contact Al Bahr Sea Tours:* 📱
+    elif any(word in text_lower for word in ['contact', 'phone', 'call', 'number', 'whatsapp', 'اتصال', 'هاتف', 'رقم', 'اتصل']):
+        if language == 'arabic':
+            response = """📞 *اتصل بجولات البحر:* 📱
+
+*هاتف:* +968 24 123456
+*واتساب:* +968 9123 4567
+*بريد إلكتروني:* info@albahrseatours.com
+
+🌐 *الموقع:* www.albahrseatours.com
+
+⏰ *ساعات خدمة العملاء:*
+7:00 صباحاً - 7:00 مساءً يومياً
+
+📍 *زورنا:*
+مارينا بندر الروضة، مسقط"""
+        else:
+            response = """📞 *Contact Al Bahr Sea Tours:* 📱
 
 *Phone:* +968 24 123456
 *WhatsApp:* +968 9123 4567
@@ -708,25 +1016,54 @@ def handle_interaction(interaction_id, phone_number):
     """Handle list and button interactions"""
     logger.info(f"Handling interaction: {interaction_id} for {phone_number}")
     
+    # Get user language from session
+    language = get_user_language(phone_number)
+    
+    # Check if it's a language selection
+    if interaction_id == "lang_english":
+        # Set English language
+        if phone_number in booking_sessions:
+            booking_sessions[phone_number]['language'] = 'english'
+        else:
+            booking_sessions[phone_number] = {'language': 'english'}
+        
+        send_welcome_message(phone_number, 'english')
+        return True
+        
+    elif interaction_id == "lang_arabic":
+        # Set Arabic language
+        if phone_number in booking_sessions:
+            booking_sessions[phone_number]['language'] = 'arabic'
+        else:
+            booking_sessions[phone_number] = {'language': 'arabic'}
+        
+        send_welcome_message(phone_number, 'arabic')
+        return True
+    
     # Check if it's a booking flow interaction
     if '|' in interaction_id:
         parts = interaction_id.split('|')
         action = parts[0]
         
+        # Handle Arabic booking flows
         if action.startswith('book_') and len(parts) >= 3:
             # Tour type selection
             tour_type_map = {
                 'book_dolphin': 'Dolphin Watching',
                 'book_snorkeling': 'Snorkeling',
                 'book_dhow': 'Dhow Cruise',
-                'book_fishing': 'Fishing Trip'
+                'book_fishing': 'Fishing Trip',
+                'book_dolphin_ar': 'مشاهدة الدلافين',
+                'book_snorkeling_ar': 'الغوص',
+                'book_dhow_ar': 'رحلة القارب',
+                'book_fishing_ar': 'رحلة صيد'
             }
             
             tour_type = tour_type_map.get(action)
             name = parts[1]
             contact = parts[2]
             
-            ask_for_adults_count(phone_number, name, contact, tour_type)
+            ask_for_adults_count(phone_number, name, contact, tour_type, language)
             return True
             
         elif action.startswith('time_') and len(parts) >= 7:
@@ -737,7 +1074,13 @@ def handle_interaction(interaction_id, phone_number):
                 'time_10am': '10:00 AM',
                 'time_2pm': '2:00 PM',
                 'time_4pm': '4:00 PM',
-                'time_6pm': '6:00 PM'
+                'time_6pm': '6:00 PM',
+                'time_8am_ar': '8:00 صباحاً',
+                'time_9am_ar': '9:00 صباحاً',
+                'time_10am_ar': '10:00 صباحاً',
+                'time_2pm_ar': '2:00 ظهراً',
+                'time_4pm_ar': '4:00 عصراً',
+                'time_6pm_ar': '6:00 مساءً'
             }
             
             booking_time = time_map.get(action, 'Not specified')
@@ -748,10 +1091,72 @@ def handle_interaction(interaction_id, phone_number):
             children_count = parts[5]
             booking_date = parts[6]
             
-            complete_booking(phone_number, name, contact, tour_type, adults_count, children_count, booking_date, booking_time)
+            complete_booking(phone_number, name, contact, tour_type, adults_count, children_count, booking_date, booking_time, language)
             return True
     
-    # Regular menu interactions
+    # Regular menu interactions - Arabic versions
+    if language == 'arabic':
+        arabic_responses = {
+            # Tour options in Arabic
+            "dolphin_tour_ar": ARABIC_MESSAGES["tour_descriptions"]["Dolphin Watching"],
+            "snorkeling_ar": ARABIC_MESSAGES["tour_descriptions"]["Snorkeling"],
+            "dhow_cruise_ar": ARABIC_MESSAGES["tour_descriptions"]["Dhow Cruise"],
+            "fishing_ar": ARABIC_MESSAGES["tour_descriptions"]["Fishing Trip"],
+            
+            # Information options in Arabic
+            "pricing_ar": ARABIC_MESSAGES["pricing"],
+            "location_ar": ARABIC_MESSAGES["location"],
+            "schedule_ar": """🕒 *جدول الجولات والتوفر* 📅
+
+*مواعيد الانطلاق اليومية:*
+
+🌅 *مغامرات الصباح:*
+• 8:00 صباحاً - مشاهدة الدلافين 🐬
+• 9:00 صباحاً - الغوص 🤿
+• 10:00 صباحاً - مشاهدة الدلافين 🐬
+• 11:00 صباحاً - الغوص 🤿
+
+🌇 *تجارب الظهيرة:*
+• 2:00 ظهراً - رحلة صيد 🎣
+• 4:00 عصراً - رحلة القارب ⛵
+• 5:00 عصراً - دلافين الغروب 🐬
+
+🌅 *سحر المساء:*
+• 6:00 مساءً - رحلة القارب ⛵
+• 6:30 مساءً - رحلة الغروب 🌅
+
+📅 *يوصى بالحجز المسبق*
+⏰ *التسجيل:* 30 دقيقة قبل الانطلاق""",
+            
+            "contact_ar": """📞 *اتصل بجولات البحر* 📱
+
+*نحن هنا لمساعدتك في تخطيط مغامرة بحرية مثالية!* 🌊
+
+📞 *هاتف:* +968 24 123456
+📱 *واتساب:* +968 9123 4567
+📧 *بريد إلكتروني:* info@albahrseatours.com
+
+🌐 *الموقع:* www.albahrseatours.com
+
+⏰ *ساعات خدمة العملاء:*
+7:00 صباحاً - 7:00 مساءً يومياً
+
+📍 *زورنا:*
+مارينا بندر الروضة
+مسقط، عمان""",
+            
+            "book_now_ar": lambda: start_booking_flow(phone_number, 'arabic')
+        }
+        
+        response = arabic_responses.get(interaction_id)
+        if callable(response):
+            response()
+            return True
+        elif response:
+            send_whatsapp_message(phone_number, response)
+            return True
+    
+    # English menu interactions (existing code)
     responses = {
         # Welcome button - now directly sends main list
         "view_options": lambda: send_main_options_list(phone_number),
@@ -921,7 +1326,7 @@ We're easy to find at Bandar Al Rowdha Marina! 🚤""",
 Marina Bandar Al Rowdha
 Muscat, Oman""",
 
-        "book_now": lambda: start_booking_flow(phone_number)
+        "book_now": lambda: start_booking_flow(phone_number, 'english')
     }
     
     response = responses.get(interaction_id)
@@ -933,7 +1338,10 @@ Muscat, Oman""",
         send_whatsapp_message(phone_number, response)
         return True
     else:
-        send_whatsapp_message(phone_number, "Sorry, I didn't understand that option. Please select from the menu. 📋")
+        if language == 'arabic':
+            send_whatsapp_message(phone_number, "عذراً، لم أفهم هذا الخيار. الرجاء الاختيار من القائمة. 📋")
+        else:
+            send_whatsapp_message(phone_number, "Sorry, I didn't understand that option. Please select from the menu. 📋")
         return False
 
 # ==============================
@@ -943,6 +1351,12 @@ Muscat, Oman""",
 def send_admin_message(phone_number, message):
     """Send message as admin to specific user - CLEAN FORMATTING"""
     try:
+        # Track that this is an admin-initiated message to prevent bot responses
+        clean_phone = clean_oman_number(phone_number)
+        if clean_phone:
+            admin_message_tracker[clean_phone] = datetime.datetime.now().isoformat()
+            logger.info(f"🔧 Admin message tracked for {clean_phone}")
+        
         success = send_whatsapp_message(phone_number, message)
         
         if success:
@@ -973,6 +1387,7 @@ def get_user_session(phone_number):
             'children_count': session.get('children_count', '0'),
             'total_guests': session.get('total_guests', '0'),
             'booking_date': session.get('booking_date', 'Not selected'),
+            'language': session.get('language', 'english'),
             'created_at': session.get('created_at', 'Unknown')
         }
     else:
@@ -1024,6 +1439,9 @@ def webhook():
         message = messages[0]
         phone_number = message["from"]
         
+        # Get user language
+        language = get_user_language(phone_number)
+        
         # STORE USER MESSAGE FOR TWO-WAY CHAT - ENHANCED
         if "text" in message:
             user_message = message["text"]["body"].strip()
@@ -1072,51 +1490,89 @@ def webhook():
             # Get current session
             session = booking_sessions.get(phone_number)
             
-            # First, check for keyword questions (unless in booking flow)
-            if not session and handle_keyword_questions(text, phone_number):
-                return jsonify({"status": "keyword_answered"})
+            # CHECK FOR RECENT ADMIN MESSAGES FIRST - PREVENT BOT INTERRUPTION
+            clean_phone = clean_oman_number(phone_number)
+            if clean_phone and clean_phone in admin_message_tracker:
+                admin_time = datetime.datetime.fromisoformat(admin_message_tracker[clean_phone])
+                current_time = datetime.datetime.now()
+                time_diff = (current_time - admin_time).total_seconds()
+                
+                # If admin message was sent within the last 2 minutes, don't auto-respond
+                if time_diff < 120:  # 2 minutes
+                    logger.info(f"🔧 Skipping auto-response due to recent admin message to {clean_phone}")
+                    # Remove from tracker after processing
+                    del admin_message_tracker[clean_phone]
+                    return jsonify({"status": "admin_conversation_ongoing"})
             
-            # Check for greeting
-            if not session and text.lower() in ["hi", "hello", "hey", "start", "menu"]:
-                send_welcome_message(phone_number)
-                return jsonify({"status": "welcome_sent"})
+            # CHECK FOR LANGUAGE SELECTION FIRST - NEW USERS
+            # If user has no session and sends any greeting, show language selection
+            if not session:
+                text_lower = text.lower()
+                greetings_english = ["hi", "hello", "hey", "start", "menu", "hola", "good morning", "good afternoon", "good evening"]
+                greetings_arabic = ["مرحبا", "اهلا", "السلام عليكم", "اهلين", "سلام", "مرحباً", "أهلاً", "السلام"]
+                
+                # Check if it's any kind of greeting
+                is_greeting = (text_lower in greetings_english or 
+                             any(ar_greeting in text for ar_greeting in greetings_arabic) or
+                             text_lower in [g.lower() for g in greetings_arabic])
+                
+                if is_greeting:
+                    send_language_selection(phone_number)
+                    return jsonify({"status": "language_selection_sent"})
+                
+                # If it's not a greeting but contains Arabic characters, assume Arabic preference
+                elif any('\u0600' <= char <= '\u06FF' for char in text):
+                    # Auto-set to Arabic and send Arabic welcome
+                    booking_sessions[phone_number] = {'language': 'arabic'}
+                    send_welcome_message(phone_number, 'arabic')
+                    return jsonify({"status": "auto_arabic_detected"})
+                
+                # First, check for keyword questions (unless in booking flow)
+                if handle_keyword_questions(text, phone_number, language):
+                    return jsonify({"status": "keyword_answered"})
             
             # Handle booking flow - name input
             if session and session.get('step') == 'awaiting_name':
-                ask_for_contact(phone_number, text)
+                ask_for_contact(phone_number, text, language)
                 return jsonify({"status": "name_received"})
             
             # Handle booking flow - contact input
             elif session and session.get('step') == 'awaiting_contact':
                 name = session.get('name', '')
-                ask_for_tour_type(phone_number, name, text)
+                ask_for_tour_type(phone_number, name, text, language)
                 return jsonify({"status": "contact_received"})
             
             # Handle booking flow - adults count input
             elif session and session.get('step') == 'awaiting_adults_count':
-                # Validate numeric input
+                # Validate numeric input (works for both languages)
                 if text.isdigit() and int(text) > 0:
                     name = session.get('name', '')
                     contact = session.get('contact', '')
                     tour_type = session.get('tour_type', '')
-                    ask_for_children_count(phone_number, name, contact, tour_type, text)
+                    ask_for_children_count(phone_number, name, contact, tour_type, text, language)
                     return jsonify({"status": "adults_count_received"})
                 else:
-                    send_whatsapp_message(phone_number, "Please enter a valid number of adults (e.g., 2, 4, 6)")
+                    if language == 'arabic':
+                        send_whatsapp_message(phone_number, "الرجاء إدخال عدد صحيح للبالغين (مثال: 2, 4, 6)")
+                    else:
+                        send_whatsapp_message(phone_number, "Please enter a valid number of adults (e.g., 2, 4, 6)")
                     return jsonify({"status": "invalid_adults_count"})
             
             # Handle booking flow - children count input
             elif session and session.get('step') == 'awaiting_children_count':
-                # Validate numeric input
+                # Validate numeric input (works for both languages)
                 if text.isdigit() and int(text) >= 0:
                     name = session.get('name', '')
                     contact = session.get('contact', '')
                     tour_type = session.get('tour_type', '')
                     adults_count = session.get('adults_count', '')
-                    ask_for_date(phone_number, name, contact, tour_type, adults_count, text)
+                    ask_for_date(phone_number, name, contact, tour_type, adults_count, text, language)
                     return jsonify({"status": "children_count_received"})
                 else:
-                    send_whatsapp_message(phone_number, "Please enter a valid number of children (e.g., 0, 1, 2)")
+                    if language == 'arabic':
+                        send_whatsapp_message(phone_number, "الرجاء إدخال عدد صحيح للأطفال (مثال: 0, 1, 2)")
+                    else:
+                        send_whatsapp_message(phone_number, "Please enter a valid number of children (e.g., 0, 1, 2)")
                     return jsonify({"status": "invalid_children_count"})
             
             # Handle booking flow - date input
@@ -1127,13 +1583,22 @@ def webhook():
                 adults_count = session.get('adults_count', '')
                 children_count = session.get('children_count', '')
                 
-                ask_for_time(phone_number, name, contact, tour_type, adults_count, children_count, text)
+                ask_for_time(phone_number, name, contact, tour_type, adults_count, children_count, text, language)
                 return jsonify({"status": "date_received"})
             
-            # If no specific match, send welcome message
-            if not session:
-                send_welcome_message(phone_number)
+            # If user has a language but no active session, check for keywords
+            if session and not session.get('step'):
+                if handle_keyword_questions(text, phone_number, language):
+                    return jsonify({"status": "keyword_answered"})
+            
+            # If no specific match and user has language set, send appropriate welcome
+            if session and session.get('language'):
+                send_welcome_message(phone_number, session.get('language'))
                 return jsonify({"status": "fallback_welcome_sent"})
+            
+            # Final fallback - send language selection
+            send_language_selection(phone_number)
+            return jsonify({"status": "fallback_language_selection"})
         
         return jsonify({"status": "unhandled_message_type"})
         
@@ -1408,6 +1873,7 @@ def get_active_sessions():
                 'children_count': session.get('children_count', '0'),
                 'total_guests': session.get('total_guests', '0'),
                 'booking_date': session.get('booking_date', 'Not selected'),
+                'language': session.get('language', 'english'),
                 'created_at': session.get('created_at', 'Unknown'),
                 'last_activity': datetime.datetime.now().isoformat()
             }
@@ -1432,7 +1898,8 @@ def health():
         "active_sessions": len(booking_sessions),
         "chat_messages_stored": sum(len(msgs) for msgs in chat_messages.values()),
         "unique_chat_users": len(chat_messages),
-        "version": "9.0 - Enhanced Two-Way Chat & Message Persistence"
+        "admin_conversations_tracked": len(admin_message_tracker),
+        "version": "11.0 - Admin Conversation Protection & Enhanced Language Support"
     }
     return jsonify(status)
 
